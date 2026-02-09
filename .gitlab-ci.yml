@@ -98,14 +98,20 @@ publish_package:
     - main
   script:
     - echo "Publishing package version $TAG to registry..."
+    
+    # 1. Keep History: Upload with the specific version name to the specific version folder
+    # URL Result: .../exitzero/v1.0.0+1-build.31/ExitZero-v1.0.0+1-build.31.apk
     - |
       curl --header "JOB-TOKEN: $CI_JOB_TOKEN" \
            --upload-file "release/ExitZero-${TAG}.apk" \
            "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/exitzero/${TAG}/ExitZero-${TAG}.apk"
+
+    # 2. Update Latest: Upload the SAME file but rename it to 'ExitZero-latest.apk' inside the 'latest' folder
+    # URL Result: .../exitzero/latest/ExitZero-latest.apk (This link never changes)
     - |
       curl --header "JOB-TOKEN: $CI_JOB_TOKEN" \
            --upload-file "release/ExitZero-${TAG}.apk" \
-           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/exitzero/latest/ExitZero-${TAG}.apk"
+           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/exitzero/latest/ExitZero-latest.apk"
 
 # ── Trigger Pages deployment to update website version ──
 trigger_pages:
