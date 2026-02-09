@@ -34,6 +34,7 @@ build_apk:
       TAG="v${VERSION}-build.${CI_PIPELINE_IID}"
       echo "VERSION=$VERSION" >> build.env
       echo "TAG=$TAG" >> build.env
+      echo "BUILD_JOB_ID=$CI_JOB_ID" >> build.env
       mkdir -p release
       mv build/app/outputs/flutter-apk/app-release.apk "release/ExitZero-${TAG}.apk"
   artifacts:
@@ -68,5 +69,5 @@ create_release:
     assets:
       links:
         - name: "ExitZero-${TAG}.apk"
-          url: "${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/raw/release/ExitZero-${TAG}.apk"
+          url: "${CI_PROJECT_URL}/-/jobs/${BUILD_JOB_ID}/artifacts/raw/release/ExitZero-${TAG}.apk"
           link_type: package
