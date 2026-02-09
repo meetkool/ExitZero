@@ -97,11 +97,11 @@ publish_package:
   only:
     - main
   script:
-    - echo "Publishing package version $VERSION to registry..."
+    - echo "Publishing package version $TAG to registry..."
     - |
       curl --header "JOB-TOKEN: $CI_JOB_TOKEN" \
            --upload-file "release/ExitZero-${TAG}.apk" \
-           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/exitzero/${VERSION}/ExitZero-${TAG}.apk"
+           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/exitzero/${TAG}/ExitZero-${TAG}.apk"
     - |
       curl --header "JOB-TOKEN: $CI_JOB_TOKEN" \
            --upload-file "release/ExitZero-${TAG}.apk" \
