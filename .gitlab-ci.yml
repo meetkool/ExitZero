@@ -47,25 +47,11 @@ build_apk:
     - |
       VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //')
       TAG="v${VERSION}-build.${CI_PIPELINE_IID}"
-      APK_NAME="ExitZero-${TAG}.apk"
       echo "VERSION=$VERSION" >> build.env
       echo "TAG=$TAG" >> build.env
       echo "BUILD_JOB_ID=$CI_JOB_ID" >> build.env
-      echo "APK_NAME=$APK_NAME" >> build.env
       mkdir -p release
-      mv build/app/outputs/flutter-apk/app-release.apk "release/${APK_NAME}"
-      
-      # Upload to GitLab Package Registry (Generic)
-      echo "Uploading ${APK_NAME} to Package Registry..."
-      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
-           --upload-file "release/${APK_NAME}" \
-           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/exitzero/${VERSION}/${APK_NAME}"
-           
-      # Also upload as 'latest' for stable URL
-      echo "Uploading as latest..."
-      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
-           --upload-file "release/${APK_NAME}" \
-           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/exitzero/latest/ExitZero-latest.apk"
+      mv build/app/outputs/flutter-apk/app-release.apk "release/ExitZero-${TAG}.apk"
   artifacts:
     paths:
       - release/
@@ -97,11 +83,8 @@ create_release:
       Download the APK below and install on your Android device.
     assets:
       links:
-        - name: "ExitZero-${TAG}.apk (Permanent Link)"
-          url: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/exitzero/${VERSION}/${APK_NAME}"
-          link_type: package
-        - name: "ExitZero-latest.apk (Stable Link)"
-          url: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/exitzero/latest/ExitZero-latest.apk"
+        - name: "ExitZero-${TAG}.apk"
+          url: "${CI_PROJECT_URL}/-/jobs/${BUILD_JOB_ID}/artifacts/raw/release/ExitZero-${TAG}.apk"
           link_type: package
 
 # ── Trigger Pages deployment to update website version ──
