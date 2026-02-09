@@ -16,13 +16,13 @@ docker_build:
   image: docker:latest
   services:
     - docker:dind
-  only:
-    - main
   rules:
-    - changes:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
         - Dockerfile
       when: always
-    - when: manual
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
       allow_failure: true
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
