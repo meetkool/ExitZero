@@ -16,12 +16,13 @@ build_apk:
     - flutter pub get
   script:
     - flutter build apk --release
-    - VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //')
-    - TAG="v${VERSION}-build.${CI_PIPELINE_IID}"
-    - echo "VERSION=$VERSION" >> build.env
-    - echo "TAG=$TAG" >> build.env
-    - mkdir -p release
-    - mv build/app/outputs/flutter-apk/app-release.apk release/ExitZero-${TAG}.apk
+    - |
+      VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //')
+      TAG="v${VERSION}-build.${CI_PIPELINE_IID}"
+      echo "VERSION=$VERSION" >> build.env
+      echo "TAG=$TAG" >> build.env
+      mkdir -p release
+      mv build/app/outputs/flutter-apk/app-release.apk "release/ExitZero-${TAG}.apk"
   artifacts:
     paths:
       - release/
