@@ -40,3 +40,4 @@ RUN flutter create --platforms=android warmup_app && \
     cd / && rm -rf /tmp/warmup
 
 WORKDIR /builds
+
