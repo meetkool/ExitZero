@@ -87,6 +87,26 @@ create_release:
           url: "${CI_PROJECT_URL}/-/jobs/${BUILD_JOB_ID}/artifacts/raw/release/ExitZero-${TAG}.apk"
           link_type: package
 
+# ── Publish APK to GitLab Package Registry ──
+publish_package:
+  stage: release
+  image: curlimages/curl:latest
+  needs:
+    - job: build_apk
+      artifacts: true
+  only:
+    - main
+  script:
+    - echo "Publishing package version $VERSION to registry..."
+    - |
+      curl --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+           --upload-file "release/ExitZero-${TAG}.apk" \
+           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/exitzero/${VERSION}/ExitZero-${TAG}.apk"
+    - |
+      curl --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+           --upload-file "release/ExitZero-${TAG}.apk" \
+           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/exitzero/latest/ExitZero-${TAG}.apk"
+
 # ── Trigger Pages deployment to update website version ──
 trigger_pages:
   stage: release
