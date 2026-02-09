@@ -103,3 +103,20 @@ create_release:
         - name: "ExitZero-latest.apk (Stable Link)"
           url: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/exitzero/latest/ExitZero-latest.apk"
           link_type: package
+
+# ── Trigger Pages deployment to update website version ──
+trigger_pages:
+  stage: release
+  image: curlimages/curl:latest
+  needs:
+    - job: create_release
+      artifacts: false
+  only:
+    - main
+  script:
+    - echo "Triggering pages pipeline to update website version..."
+    - |
+      curl --request POST \
+        --form "token=$CI_JOB_TOKEN" \
+        --form "ref=pages" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/trigger/pipeline"
