@@ -6,7 +6,9 @@ FROM ghcr.io/cirruslabs/flutter:latest
 # Versions (update these when upgrading)
 ENV GRADLE_VERSION=8.14
 ENV ANDROID_COMPILE_SDK=35
-ENV ANDROID_BUILD_TOOLS=35.0.1
+# Install multiple build-tools versions that Flutter might need
+ENV ANDROID_BUILD_TOOLS_1=35.0.0
+ENV ANDROID_BUILD_TOOLS_2=35.0.1
 
 # Pre-download Gradle distribution
 RUN mkdir -p /opt/gradle && \
@@ -23,21 +25,27 @@ RUN yes | sdkmanager --licenses && \
     sdkmanager --update && \
     sdkmanager \
     "platforms;android-${ANDROID_COMPILE_SDK}" \
-    "build-tools;${ANDROID_BUILD_TOOLS}" \
+    "platforms;android-34" \
+    "build-tools;${ANDROID_BUILD_TOOLS_1}" \
+    "build-tools;${ANDROID_BUILD_TOOLS_2}" \
     "platform-tools" \
-    "cmdline-tools;latest"
+    "cmdline-tools;latest" \
+    "cmake;3.22.1" \
+    "ndk;27.0.12077973"
 
 # Pre-warm Flutter
 RUN flutter precache --android
 
-# Create a dummy project to pre-download Gradle plugins and dependencies
+# Create a dummy Flutter project and run a full release build to cache everything
 WORKDIR /tmp/warmup
 RUN flutter create --platforms=android warmup_app && \
     cd warmup_app && \
     flutter pub get && \
-    cd android && \
-    ./gradlew --no-daemon tasks || true && \
+    flutter build apk --release || true && \
     cd / && rm -rf /tmp/warmup
 
-WORKDIR /builds
+# Clean up to reduce image size
+RUN rm -rf /root/.gradle/caches/transforms-* && \
+    rm -rf /root/.gradle/daemon
 
+WORKDIR /builds
