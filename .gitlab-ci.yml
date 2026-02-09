@@ -4,6 +4,8 @@ stages:
 
 variables:
   FLUTTER_VERSION: "stable"
+  # Speed up Gradle
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.caching=true"
 
 # ── Build release APK ──
 build_apk:
@@ -11,10 +13,21 @@ build_apk:
   image: ghcr.io/cirruslabs/flutter:latest
   only:
     - main
-  before_script:
-    - flutter --version
-    - flutter pub get
+  cache:
+    # Cache pub packages, Gradle, and Android SDK downloads across runs
+    - key: flutter-pub-${CI_COMMIT_REF_SLUG}
+      paths:
+        - .pub-cache/
+        - .dart_tool/
+      policy: pull-push
+    - key: gradle-cache
+      paths:
+        - android/.gradle/
+        - /root/.gradle/caches/
+        - /root/.gradle/wrapper/
+      policy: pull-push
   script:
+    - flutter pub get
     - flutter build apk --release
     - |
       VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //')
