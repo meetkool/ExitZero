@@ -5,30 +5,15 @@ import 'package:flutter/services.dart';
 // ─── Data model ──────────────────────────────────────────────────────────────
 
 /// Describes one item in the [BentoGrid].
-///
-/// Each item needs a unique [id] for tracking during reorder / resize.
-/// [columnSpan] = 1 → half-width, 2 → full-width.
-/// [height] is the grid-level height (the grid controls sizing, not the card).
 class BentoGridItem {
   final String id;
-
-  /// How many columns this item currently spans.
   final int columnSpan;
-
-  /// Minimum and maximum allowed column spans (1 or 2).
-  /// Use these to lock a card to full width or half width.
   final int minSpan;
   final int maxSpan;
-
-  /// Initial height and min/max height bounds.
   final double height;
   final double minHeight;
   final double maxHeight;
-
-  /// Whether this item can be resized at all.
   final bool resizable;
-
-  /// The widget to render (usually a BentoCard).
   final Widget card;
 
   const BentoGridItem({
@@ -153,37 +138,14 @@ _Layout _computeLayout(List<_Item> items, double w, double gap) {
 
 // ─── Widget ──────────────────────────────────────────────────────────────────
 
-/// Interactive 2-column bento grid.
-///
-/// **How it works:**
-/// 1. **Long press** any card → enter edit mode (cards jiggle, handles appear).
-/// 2. **Drag** any card → reorder (adjacent items swap with animation).
-/// 3. **Drag handles on any side / corner** → resize (snaps on release).
-/// 4. **Double‑tap** a card → toggle half ↔ full width (if allowed).
-/// 5. **Tap "Done"** or **tap empty space** → exit edit mode.
-///
-/// The parent should disable scrolling only while the grid is actively
-/// dragging/resizing, otherwise the scroll steals the drag gesture.
 class BentoGrid extends StatefulWidget {
   final List<BentoGridItem> items;
   final double spacing;
   final EdgeInsets padding;
-
-  /// Called whenever edit mode is entered / exited.
-  /// The parent should disable scrolling when `true`.
   final ValueChanged<bool>? onEditModeChanged;
-
-  /// Called when a drag/resize gesture starts or ends.
-  /// Use this to temporarily disable scrolling while interacting.
   final ValueChanged<bool>? onInteractionChanged;
-
-  /// Emits the current layout (order, span, height) when it changes.
   final ValueChanged<List<BentoGridLayoutItem>>? onLayoutChanged;
-
-  /// Called when the user taps "Reset" in edit mode.
   final VoidCallback? onResetRequested;
-
-  /// Increment to force the grid to resync its internal state.
   final int layoutVersion;
 
   const BentoGrid({
@@ -202,8 +164,7 @@ class BentoGrid extends StatefulWidget {
   State<BentoGrid> createState() => _BentoGridState();
 }
 
-class _BentoGridState extends State<BentoGrid>
-    with TickerProviderStateMixin {
+class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
   // ── State ──────────────────────────────────────────────────────────────────
   late List<_Item> _items;
   bool _editMode = false;
@@ -239,7 +200,7 @@ class _BentoGridState extends State<BentoGrid>
     _syncItems();
     _jiggle = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 300), // Slightly faster jiggle
       lowerBound: -1,
       upperBound: 1,
     );
@@ -289,7 +250,7 @@ class _BentoGridState extends State<BentoGrid>
 
   void _enterEdit() {
     if (_editMode) return;
-    HapticFeedback.mediumImpact();
+    HapticFeedback.mediumImpact(); // Distinct buzz when entering edit mode
     _jiggle.repeat(reverse: true);
     setState(() => _editMode = true);
     widget.onEditModeChanged?.call(true);
@@ -316,8 +277,12 @@ class _BentoGridState extends State<BentoGrid>
   // ── Drag (pan gesture — only active in edit mode) ──────────────────────────
 
   void _startDrag(int i, Offset globalPosition) {
+    // If we are already dragging something else, ignore new touches
     if (!_editMode || _dragIdx != null || _resizeIdx != null) return;
-    HapticFeedback.lightImpact();
+    
+    // Strong vibration to indicate selection ("Zig")
+    HapticFeedback.mediumImpact(); 
+    
     _setInteractionActive(true);
     setState(() {
       _dragIdx = i;
@@ -386,7 +351,7 @@ class _BentoGridState extends State<BentoGrid>
     );
     _dragIdx = target;
     _layout = nl;
-    HapticFeedback.selectionClick();
+    HapticFeedback.selectionClick(); // Light click on swap
     _emitLayout();
   }
 
@@ -395,6 +360,10 @@ class _BentoGridState extends State<BentoGrid>
   }
 
   void _dragFinish() {
+    if (_dragIdx != null) {
+      // Feedback on drop
+      HapticFeedback.lightImpact();
+    }
     _setInteractionActive(false);
     setState(() {
       _dragIdx = null;
@@ -418,7 +387,7 @@ class _BentoGridState extends State<BentoGrid>
     _dragFinish();
   }
 
-  // ── Resize (handles on all sides) ──────────────────────────────────────────
+  // ── Resize ─────────────────────────────────────────────────────────────────
 
   bool _hasTop(_ResizeHandle h) =>
       h == _ResizeHandle.top ||
@@ -489,19 +458,15 @@ class _BentoGridState extends State<BentoGrid>
       newLeft = start.left;
     }
 
-    // Keep within grid bounds
     newLeft = newLeft.clamp(0.0, _gridW - newWidth);
     newTop = newTop.clamp(0.0, double.infinity);
 
-    // Apply height immediately so other rows can shift.
     it.height = newHeight;
 
-    // Decide pending span based on preview width (snaps on release).
     if (_hasLeft(_resizeHandle!) || _hasRight(_resizeHandle!)) {
       final spanThreshold = (half + _gridW) / 2;
       final desiredSpan = newWidth >= spanThreshold ? 2 : 1;
-      _resizePendingSpan =
-          desiredSpan.clamp(it.minSpan, it.maxSpan).toInt();
+      _resizePendingSpan = desiredSpan.clamp(it.minSpan, it.maxSpan).toInt();
     }
 
     _resizePreview = _Rect(newLeft, newTop, newWidth, newHeight);
@@ -547,7 +512,6 @@ class _BentoGridState extends State<BentoGrid>
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (ctx, box) {
       _gridW = box.maxWidth - widget.padding.horizontal;
-      // Spread cards apart in edit mode so resize handles don't overlap
       _gap = _editMode ? widget.spacing + 20 : widget.spacing;
       _layout = _computeLayout(_items, _gridW, _gap);
 
@@ -559,14 +523,11 @@ class _BentoGridState extends State<BentoGrid>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ── Edit-mode header ──
               AnimatedSize(
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOut,
                 child: _editMode ? _buildEditHeader() : const SizedBox.shrink(),
               ),
-
-              // ── Grid ──
               AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 height: _layout!.totalHeight,
@@ -585,8 +546,6 @@ class _BentoGridState extends State<BentoGrid>
       );
     });
   }
-
-  // ── Edit header (EDIT LAYOUT / Done) ──
 
   Widget _buildEditHeader() {
     return Padding(
@@ -657,8 +616,6 @@ class _BentoGridState extends State<BentoGrid>
     );
   }
 
-  // ── Position each card inside the Stack ──
-
   Widget _positioned(int i) {
     final baseRect = _layout!.rects[i];
     final r = i == _resizeIdx && _resizePreview != null
@@ -696,16 +653,14 @@ class _BentoGridState extends State<BentoGrid>
     );
   }
 
-  // ── Build one card ──
-
   Widget _cardWidget(int i, bool dragging) {
     final item = _items[i];
-
-    // Card content
     Widget c = SizedBox.expand(child: item.card);
+
+    // 1. Block inner interactions (buttons etc.) in edit mode
     if (_editMode) c = AbsorbPointer(child: c);
 
-    // Jiggle (not while dragging this card)
+    // 2. Jiggle animation (only if not currently being dragged)
     if (_editMode && !dragging) {
       c = AnimatedBuilder(
         animation: _jiggle,
@@ -717,12 +672,34 @@ class _BentoGridState extends State<BentoGrid>
       );
     }
 
-    // Drag visual (scale + shadow)
+    // 3. Non-selected boxes: shrink, gray out, and fade
+    //    When dragging one box, all others become small & grayed
+    final bool isInactive = _dragIdx != null && !dragging;
+    
+    // Grayscale matrix for desaturation effect
+    const grayscaleMatrix = ColorFilter.matrix(<double>[
+      0.2126, 0.7152, 0.0722, 0, 0,
+      0.2126, 0.7152, 0.0722, 0, 0,
+      0.2126, 0.7152, 0.0722, 0, 0,
+      0,      0,      0,      1, 0,
+    ]);
+
+    if (isInactive) {
+      c = ColorFiltered(
+        colorFilter: grayscaleMatrix,
+        child: c,
+      );
+    }
+
+    // 4. Scale & Shadow - dragged box pops up, inactive boxes shrink down
     c = AnimatedContainer(
       duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
       transform: dragging
           ? Matrix4.diagonal3Values(1.05, 1.05, 1.0)
-          : Matrix4.identity(),
+          : isInactive
+              ? Matrix4.diagonal3Values(0.92, 0.92, 1.0)
+              : Matrix4.identity(),
       transformAlignment: Alignment.center,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
@@ -739,17 +716,31 @@ class _BentoGridState extends State<BentoGrid>
       child: c,
     );
 
-    // ── Gesture handling ──
-    // Normal mode  → long press enters edit mode (card taps still work).
-    // Edit mode    → pan to drag-reorder (scroll is disabled by parent).
+    // 5. Fade inactive boxes
+    c = AnimatedOpacity(
+      opacity: isInactive ? 0.4 : 1.0,
+      duration: const Duration(milliseconds: 200),
+      child: c,
+    );
+
+    // 6. Gestures
+    // If in edit mode, use Listener for immediate drag response (no gesture competition)
     if (_editMode) {
       c = GestureDetector(
-        onTap: () {}, // consume tap so it doesn't exit edit
+        behavior: HitTestBehavior.opaque,
         onDoubleTap:
             item.minSpan == item.maxSpan ? null : () => _toggleSpan(i),
+        // Use onPanDown for immediate feedback, then onPanStart for actual drag
+        onPanDown: (_) {}, // Immediately claim the gesture
         onPanStart: (d) => _dragStart(i, d),
         onPanUpdate: _dragUpdate,
         onPanEnd: _dragEnd,
+        onPanCancel: () {
+          // Clean up if drag was cancelled
+          if (_dragIdx == i) {
+            _dragFinish();
+          }
+        },
         child: c,
       );
     } else {
@@ -761,14 +752,12 @@ class _BentoGridState extends State<BentoGrid>
       );
     }
 
-    // ── Edit-mode overlays ──
+    // 6. Resize Handles Overlays
     if (_editMode) {
       c = Stack(
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(child: c),
-
-          // Border
           Positioned.fill(
             child: IgnorePointer(
               child: Container(
@@ -782,7 +771,6 @@ class _BentoGridState extends State<BentoGrid>
               ),
             ),
           ),
-          // ── Resize handles (all sides) ──
           ..._buildResizeHandles(i, item),
         ],
       );
@@ -793,12 +781,13 @@ class _BentoGridState extends State<BentoGrid>
 
   List<Widget> _buildResizeHandles(int i, _Item item) {
     if (!item.resizable) return const [];
+    // Hide handles on the active card while dragging it to reduce visual clutter
+    if (_dragIdx == i) return const [];
 
     final allowHorizontal = item.minSpan != item.maxSpan;
     final allowVertical = item.minHeight != item.maxHeight;
 
     return [
-      // Edges
       if (allowVertical) _edgeHandle(i, _ResizeHandle.top, Alignment.topCenter),
       if (allowVertical)
         _edgeHandle(i, _ResizeHandle.bottom, Alignment.bottomCenter),
@@ -806,8 +795,6 @@ class _BentoGridState extends State<BentoGrid>
         _edgeHandle(i, _ResizeHandle.left, Alignment.centerLeft),
       if (allowHorizontal)
         _edgeHandle(i, _ResizeHandle.right, Alignment.centerRight),
-
-      // Corners (both directions)
       if (allowHorizontal && allowVertical) ...[
         _cornerHandle(i, _ResizeHandle.topLeft, Alignment.topLeft),
         _cornerHandle(i, _ResizeHandle.topRight, Alignment.topRight),
