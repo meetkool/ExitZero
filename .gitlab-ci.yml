@@ -1,4 +1,5 @@
 stages:
+  - docker
   - build
   - release
 
@@ -6,25 +7,41 @@ variables:
   FLUTTER_VERSION: "stable"
   # Speed up Gradle
   GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.caching=true"
+  # Custom image tag
+  CI_IMAGE: "${CI_REGISTRY_IMAGE}/flutter-builder:latest"
+
+# ── Build and push custom Docker image ──
+docker_build:
+  stage: docker
+  image: docker:latest
+  services:
+    - docker:dind
+  only:
+    - main
+  rules:
+    - changes:
+        - Dockerfile
+      when: always
+    - when: manual
+      allow_failure: true
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    - docker build -t "$CI_IMAGE" .
+    - docker push "$CI_IMAGE"
 
 # ── Build release APK ──
 build_apk:
   stage: build
-  image: ghcr.io/cirruslabs/flutter:latest
+  image: ${CI_IMAGE}
   only:
     - main
   cache:
-    # Cache pub packages, Gradle, and Android SDK downloads across runs
+    # Cache pub packages across runs
     - key: flutter-pub-${CI_COMMIT_REF_SLUG}
       paths:
         - .pub-cache/
         - .dart_tool/
-      policy: pull-push
-    - key: gradle-cache
-      paths:
-        - android/.gradle/
-        - /root/.gradle/caches/
-        - /root/.gradle/wrapper/
       policy: pull-push
   script:
     - flutter pub get
