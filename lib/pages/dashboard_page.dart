@@ -26,8 +26,7 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   static const _layoutStorageKey = 'bento_grid_layout_v1';
 
-  /// When true the grid is in edit mode (header + handles are visible).
-  bool _gridEditing = false;
+
 
   /// True only while dragging/resizing (scroll temporarily disabled).
   bool _gridInteracting = false;
@@ -329,7 +328,6 @@ class _DashboardPageState extends State<DashboardPage> {
                       setState(() => _gridInteracting = active);
                     },
                     onEditModeChanged: (editing) {
-                      setState(() => _gridEditing = editing);
                       if (!editing) {
                         _saveLayout();
                       }

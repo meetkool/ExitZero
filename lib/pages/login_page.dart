@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_text_field.dart';
+import '../services/auth_service.dart';
+import '../services/token_storage.dart';
 
 /// Login page with email, password, forgot-password link and Google.
 class LoginPage extends StatefulWidget {
@@ -15,16 +17,54 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
 
-  void _handleLogin() {
-    if (_formKey.currentState!.validate()) {
-      // TODO: Replace with actual API / Firebase call
-      // Existing user → go straight to dashboard
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. Login → get JWT
+      final loginData = await AuthService.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      final token = loginData['access_token'] as String;
+
+      // 2. Save token
+      await TokenStorage.saveToken(token);
+
+      // 3. Fetch & cache user profile
+      final user = await AuthService.getMe(token);
+      await TokenStorage.saveUserData(user);
+
+      if (!mounted) return;
+
+      // 4. Navigate to dashboard
       Navigator.pushNamedAndRemoveUntil(
         context,
         '/dashboard',
         (route) => false,
       );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppColors.burnt,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Network error. Please check your connection.'),
+          backgroundColor: AppColors.burnt,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -134,10 +174,37 @@ class _LoginPageState extends State<LoginPage> {
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
               child: Column(
                 children: [
-                  AppFilledButton(
-                    label: 'LOG IN',
-                    onPressed: _handleLogin,
-                    backgroundColor: AppColors.burnt,
+                  // Login button with loading state
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _handleLogin,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.burnt,
+                        disabledBackgroundColor: AppColors.burnt.withValues(alpha: 0.6),
+                        foregroundColor: AppColors.cream,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        elevation: 4,
+                        textStyle: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                valueColor: AlwaysStoppedAnimation(AppColors.cream),
+                              ),
+                            )
+                          : const Text('LOG IN'),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   const AppDividerWithText(text: 'or'),
@@ -153,7 +220,7 @@ class _LoginPageState extends State<LoginPage> {
                       'https://www.svgrepo.com/show/475656/google-color.svg',
                       width: 20,
                       height: 20,
-                      errorBuilder: (_, __, ___) =>
+                      errorBuilder: (context, error, stackTrace) =>
                           const Icon(Icons.g_mobiledata, size: 24),
                     ),
                   ),

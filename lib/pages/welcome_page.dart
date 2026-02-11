@@ -92,7 +92,7 @@ class WelcomePage extends StatelessWidget {
                     'https://www.svgrepo.com/show/475656/google-color.svg',
                     width: 20,
                     height: 20,
-                    errorBuilder: (_, __, ___) =>
+                    errorBuilder: (context, error, stackTrace) =>
                         const Icon(Icons.g_mobiledata, size: 24),
                   ),
                 ),

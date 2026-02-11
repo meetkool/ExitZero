@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
+import '../services/auth_service.dart';
+import '../services/token_storage.dart';
 
 /// Profile-setup / onboarding page shown after a new registration.
 /// User can upload an avatar, set a display name, and "initialize" their profile.
@@ -16,6 +18,20 @@ class _OnboardingPageState extends State<OnboardingPage> {
   final _displayNameController = TextEditingController(text: '');
   File? _avatarFile;
   _ButtonState _buttonState = _ButtonState.idle;
+
+  @override
+  void initState() {
+    super.initState();
+    _prefillName();
+  }
+
+  /// Pre‐fill the display name from cached user data (the name used at signup).
+  Future<void> _prefillName() async {
+    final user = await TokenStorage.getUserData();
+    if (user != null && user['name'] != null && mounted) {
+      _displayNameController.text = user['name'].toString();
+    }
+  }
 
   // ── Avatar picker ──
   Future<void> _pickAvatar() async {
@@ -41,20 +57,60 @@ class _OnboardingPageState extends State<OnboardingPage> {
     // Processing state
     setState(() => _buttonState = _ButtonState.processing);
 
-    // Simulate save delay
-    await Future.delayed(const Duration(milliseconds: 1800));
+    try {
+      final token = await TokenStorage.getToken();
+      if (token == null) {
+        throw Exception('No auth token found. Please log in again.');
+      }
 
-    if (!mounted) return;
+      // Update display name
+      await AuthService.updateName(
+        token: token,
+        name: _displayNameController.text.trim(),
+      );
 
-    // Success state
-    setState(() => _buttonState = _ButtonState.ready);
+      // Upload avatar if selected
+      if (_avatarFile != null) {
+        await AuthService.uploadAvatar(
+          token: token,
+          filePath: _avatarFile!.path,
+        );
+      }
 
-    await Future.delayed(const Duration(milliseconds: 800));
+      // Re-fetch and cache the updated user profile
+      final user = await AuthService.getMe(token);
+      await TokenStorage.saveUserData(user);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    // Navigate to dashboard (clear the entire stack)
-    Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+      // Success state
+      setState(() => _buttonState = _ButtonState.ready);
+
+      await Future.delayed(const Duration(milliseconds: 800));
+
+      if (!mounted) return;
+
+      // Navigate to dashboard (clear the entire stack)
+      Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _buttonState = _ButtonState.idle);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppColors.burnt,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _buttonState = _ButtonState.idle);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: AppColors.burnt,
+        ),
+      );
+    }
   }
 
   @override
