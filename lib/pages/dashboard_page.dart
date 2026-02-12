@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async'; // For StreamSubscription
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
@@ -11,6 +12,13 @@ import 'dashboard/cards/interviews_card.dart';
 import 'dashboard/cards/system_logs.dart';
 import 'dashboard/cards/video_tile_card.dart';
 import 'dashboard/cards/life_score_card.dart';
+import 'dashboard/cards/life_score_card.dart';
+import '../pages/profile_page.dart';
+import '../../services/interview_service.dart';
+import '../../models/mock_interview.dart';
+import 'dashboard/cards/interviews_carousel.dart';
+import 'package:intl/intl.dart';
+import 'mock_interview_detail_page.dart'; // For navigation from modal
 
 /// Main dashboard screen — bento-grid layout with FAB.
 ///
@@ -37,10 +45,52 @@ class _DashboardPageState extends State<DashboardPage> {
   /// Forces BentoGrid to resync from new items (e.g. reset / load).
   int _layoutVersion = 0;
 
+  final InterviewService _interviewService = InterviewService();
+  List<MockInterview> _todaysInterviews = [];
+  bool _isLoadingInterviews = true;
+  StreamSubscription? _interviewSubscription;
+
   @override
   void initState() {
     super.initState();
     _loadLayout();
+    _fetchTodaysInterviews();
+    
+    // Subscribe to global updates
+    _interviewSubscription = InterviewService.onInterviewsUpdated.listen((_) {
+      if (mounted) {
+        _fetchTodaysInterviews();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _interviewSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchTodaysInterviews() async {
+    try {
+      // Fetch all scheduled interviews instead of restricting to "today"
+      // This ensures we show relevant upcoming data even if dates/timezones vary.
+      final interviews = await _interviewService.getInterviews(status: 'scheduled');
+      
+      // Sort by date (soonest first)
+      interviews.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+
+      if (!mounted) return;
+      setState(() {
+        _todaysInterviews = interviews;
+        _isLoadingInterviews = false;
+        _layoutVersion++; // Force rebuild of grid items to pick up new data
+      });
+    } catch (e) {
+      print('Error fetching interviews: $e');
+      if (mounted) {
+        setState(() => _isLoadingInterviews = false);
+      }
+    }
   }
 
   Future<void> _loadLayout() async {
@@ -92,7 +142,7 @@ class _DashboardPageState extends State<DashboardPage> {
       const BentoGridItem(
         id: 'survival',
         columnSpan: 2,
-        height: 160,
+        height: 140, // Updated height
         minHeight: 120,
         maxHeight: 240,
         card: DailySurvivalCard(
@@ -102,17 +152,7 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       ),
 
-      // Accountability Engine
-      const BentoGridItem(
-        id: 'accountability',
-        columnSpan: 2,
-        height: 100,
-        minHeight: 80,
-        maxHeight: 160,
-        card: AccountabilityCard(),
-      ),
-
-      // LeetCode (left) + Video Tile (right)
+      // LeetCode (left)
       BentoGridItem(
         id: 'leetcode',
         columnSpan: 1,
@@ -125,6 +165,8 @@ class _DashboardPageState extends State<DashboardPage> {
           onRefresh: () {},
         ),
       ),
+      
+      // Video Tile (right)
       const BentoGridItem(
         id: 'video-tile',
         columnSpan: 1,
@@ -138,12 +180,22 @@ class _DashboardPageState extends State<DashboardPage> {
           showInfo: false,
         ),
       ),
+      
+      // Accountability Engine
+      const BentoGridItem(
+        id: 'accountability',
+        columnSpan: 2,
+        height: 100,
+        minHeight: 80,
+        maxHeight: 160,
+        card: AccountabilityCard(),
+      ),
 
       // Outreach (half width)
       const BentoGridItem(
         id: 'outreach',
         columnSpan: 1,
-        height: 150,
+        height: 120, // Updated height
         minHeight: 100,
         maxHeight: 220,
         card: OutreachCard(sent: 2, total: 5),
@@ -153,8 +205,8 @@ class _DashboardPageState extends State<DashboardPage> {
       const BentoGridItem(
         id: 'life-score',
         columnSpan: 1,
-        height: 150,
-        minHeight: 120,
+        height: 120, // Updated height
+        minHeight: 100,
         maxHeight: 220,
         card: LifeScoreCard(
           score: 450,
@@ -162,18 +214,16 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       ),
 
-      // Interviews
-      const BentoGridItem(
+      // Interviews (Carousel)
+      BentoGridItem(
         id: 'interviews',
         columnSpan: 2,
-        height: 100,
+        height: 90, // Updated height
         minHeight: 80,
         maxHeight: 160,
-        card: InterviewsCard(
-          companyLetter: 'G',
-          title: 'Google Mock',
-          schedule: 'Thursday, 10:00 AM',
-          daysLeft: 2,
+        card: InterviewsCarousel(
+          interviews: _todaysInterviews,
+          onSeeAll: () => _showTodaysInterviewsModal(context),
         ),
       ),
 
@@ -200,6 +250,8 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     ];
   }
+
+  // ... (keeping _buildItems and _applyLayout as they are, no changes needed there conceptually, just reusing existing logic)
 
   List<BentoGridItem> _buildItems() {
     final defaults = _defaultItems();
@@ -244,6 +296,137 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  void _showActionModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          // Correct modal styling from HTML
+          decoration: BoxDecoration(
+            color: const Color(0xFF001e2e).withValues(alpha: 0.95),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+            border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+               // Handle
+               Container(
+                 width: 40,
+                 height: 4,
+                 decoration: BoxDecoration(
+                   color: Colors.white.withValues(alpha: 0.1),
+                   borderRadius: BorderRadius.circular(2),
+                 ),
+                 margin: const EdgeInsets.only(bottom: 24),
+               ),
+               
+               // Title
+               Text(
+                 'LOG ACTIVITY',
+                 style: TextStyle(
+                   color: AppColors.cream.withValues(alpha: 0.6),
+                   fontSize: 14,
+                   fontWeight: FontWeight.bold,
+                   letterSpacing: 1.0,
+                 ),
+               ),
+               const SizedBox(height: 32),
+
+               // Grid Buttons
+               Row(
+                 children: [
+                   Expanded(
+                     child: _buildModalButton(
+                       icon: Icons.send,
+                       color: AppColors.orange,
+                       label: 'Log Outreach',
+                       onTap: () {},
+                     ),
+                   ),
+                   const SizedBox(width: 16),
+                   Expanded(
+                     child: _buildModalButton(
+                       icon: Icons.calendar_month,
+                       color: AppColors.teal,
+                       label: 'Schedule Mock',
+                       onTap: () async {
+                         Navigator.pop(context);
+                         await Navigator.pushNamed(context, '/schedule-mock');
+                         if (context.mounted) {
+                            _fetchTodaysInterviews();
+                         }
+                       },
+                     ),
+                   ),
+                 ],
+               ),
+               const SizedBox(height: 32),
+
+               // Close button
+               TextButton(
+                 onPressed: () => Navigator.pop(context),
+                 child: Text(
+                   'Close',
+                   style: TextStyle(
+                     color: AppColors.cream.withValues(alpha: 0.6),
+                     fontSize: 16,
+                     fontWeight: FontWeight.w500,
+                   ),
+                 ),
+               ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildModalButton({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 140,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -261,26 +444,28 @@ class _DashboardPageState extends State<DashboardPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Header ──
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+                   // ── Header ──
+                  Container(
+                    height: 64,
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    color: Colors.black.withValues(alpha: 0.8), // Using withValues for alpha
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Row(
                           children: [
                             Container(
-                              width: 30,
-                              height: 30,
-                              padding: const EdgeInsets.all(4),
+                              width: 32,
+                              height: 32,
                               decoration: BoxDecoration(
-                                color: AppColors.teal.withValues(alpha: 0.2),
+                                color: Colors.white.withValues(alpha: 0.05),
                                 borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                               ),
-                              child: Image.asset(
-                                'assets/app_logo.png',
-                                fit: BoxFit.contain,
+                              child: Icon(
+                                Icons.dashboard,
+                                color: Colors.white.withValues(alpha: 0.5),
+                                size: 18,
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -288,27 +473,35 @@ class _DashboardPageState extends State<DashboardPage> {
                               'DASHBOARD',
                               style: TextStyle(
                                 fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.cream.withValues(alpha: 0.6),
-                                letterSpacing: 3,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white.withValues(alpha: 0.4),
+                                letterSpacing: 3, // tracking-[0.2em] approx
                               ),
                             ),
                           ],
                         ),
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: AppColors.teal.withValues(alpha: 0.2),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppColors.teal.withValues(alpha: 0.3),
+                        GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ProfilePage(),
                             ),
                           ),
-                          child: Icon(
-                            Icons.person,
-                            color: AppColors.cream,
-                            size: 16,
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: AppColors.teal.withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.teal.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.person,
+                              color: AppColors.cream,
+                              size: 14,
+                            ),
                           ),
                         ),
                       ],
@@ -316,10 +509,6 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
 
                   // ── Bento Grid ──
-                  //
-                  // Long-press any card → edit mode.
-                  // Then drag to reorder, resize from any side handle,
-                  // or double-tap to toggle width.
                   BentoGrid(
                     layoutVersion: _layoutVersion,
                     onLayoutChanged: _handleLayoutChanged,
@@ -343,9 +532,7 @@ class _DashboardPageState extends State<DashboardPage> {
               bottom: 32,
               right: 24,
               child: GestureDetector(
-                onTap: () {
-                  // TODO: Open log/action menu
-                },
+                onTap: () => _showActionModal(context),
                 child: Container(
                   width: 56,
                   height: 56,
@@ -354,9 +541,9 @@ class _DashboardPageState extends State<DashboardPage> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.orange.withValues(alpha: 0.4),
-                        blurRadius: 15,
-                        offset: const Offset(0, 4),
+                        color: const Color(0xFFF77F00).withValues(alpha: 0.3), // glow-orange
+                        blurRadius: 20,
+                        spreadRadius: 0,
                       ),
                     ],
                   ),
@@ -367,6 +554,122 @@ class _DashboardPageState extends State<DashboardPage> {
           ],
         ),
       ),
+    );
+  }
+  void _showTodaysInterviewsModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.6,
+          decoration: BoxDecoration(
+            color: const Color(0xFF001e2e).withValues(alpha: 0.95),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+            border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          child: Column(
+            children: [
+               // Handle
+               Container(
+                 width: 40,
+                 height: 4,
+                 decoration: BoxDecoration(
+                   color: Colors.white.withValues(alpha: 0.1),
+                   borderRadius: BorderRadius.circular(2),
+                 ),
+                 margin: const EdgeInsets.only(bottom: 24),
+               ),
+               
+               // Title
+               Text(
+                 'UPCOMING INTERVIEWS',
+                 style: TextStyle(
+                   color: AppColors.teal,
+                   fontSize: 14,
+                   fontWeight: FontWeight.bold,
+                   letterSpacing: 1.0,
+                 ),
+               ),
+               const SizedBox(height: 20),
+
+               // List
+               Expanded(
+                 child: _todaysInterviews.isEmpty 
+                    ? const Center(child: Text("No interviews today", style: TextStyle(color: Colors.white54)))
+                    : ListView.separated(
+                        itemCount: _todaysInterviews.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                           final interview = _todaysInterviews[index];
+                           final timeStr = DateFormat('h:mm a').format(interview.dateTime);
+                           return ListTile(
+                             onTap: () {
+                               Navigator.pop(context); // Close modal
+                               Navigator.push(
+                                 context,
+                                 MaterialPageRoute(
+                                   builder: (context) => MockInterviewDetailPage(
+                                     interview: interview,
+                                     onEdit: (updated) {
+                                       // Stream will update dashboard
+                                     }, 
+                                     onDelete: () async {
+                                        await _interviewService.deleteInterview(interview.id);
+                                     },
+                                     onToggleComplete: () async {
+                                        final newStatus = interview.status == 'completed' ? 'scheduled' : 'completed';
+                                        await _interviewService.updateInterviewStatus(interview.id, newStatus);
+                                     },
+                                   ),
+                                 ),
+                               );
+                             },
+                             tileColor: Colors.white.withValues(alpha: 0.05),
+                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                             leading: CircleAvatar(
+                               backgroundColor: AppColors.teal.withValues(alpha: 0.2),
+                               child: Text(
+                                 interview.company.isNotEmpty ? interview.company[0] : '?',
+                                 style: TextStyle(color: AppColors.teal, fontWeight: FontWeight.bold),
+                               ),
+                             ),
+                             title: Text(interview.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                             subtitle: Text('${interview.role} • $timeStr', style: const TextStyle(color: Colors.white54)),
+                             trailing: Icon(Icons.chevron_right, color: Colors.white24),
+                           );
+                        },
+                      ),
+               ),
+
+               // "See All" Button
+               Padding(
+                 padding: const EdgeInsets.symmetric(vertical: 24),
+                 child: SizedBox(
+                   width: double.infinity,
+                   height: 50,
+                   child: ElevatedButton(
+                     onPressed: () async {
+                       Navigator.pop(context);
+                       await Navigator.pushNamed(context, '/schedule-mock'); // Navigate to full schedule
+                       if (context.mounted) {
+                          _fetchTodaysInterviews();
+                       }
+                     },
+                     style: ElevatedButton.styleFrom(
+                       backgroundColor: AppColors.teal,
+                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                     ),
+                     child: const Text('View Full Schedule', style: TextStyle(color: Colors.white, fontSize: 16)),
+                   ),
+                 ),
+               ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

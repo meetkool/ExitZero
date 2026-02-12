@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../theme/app_theme.dart';
 import '../../../widgets/bento_card.dart';
 
 /// "Life Score" card — shows the user's total score with a + button
@@ -21,73 +20,71 @@ class LifeScoreCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BentoCard(
-      glassmorphism: true,
-      padding: const EdgeInsets.all(20),
+      height: 120, // Match HTML
+      glassmorphism: false,
+      backgroundColor: Colors.white.withValues(alpha: 0.04),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.08)), // tile border
+      padding: const EdgeInsets.all(16),
       onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // ── Top row: title + "+" button ──
+          // ── Top row: Label and + button ──
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Left: label + score
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Life Score',
-                      style: TextStyle(
-                        color: AppColors.cream.withValues(alpha: 0.5),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$score',
-                      style: const TextStyle(
-                        fontSize: 48,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        height: 1.1,
-                      ),
-                    ),
-                  ],
+              Text(
+                'Life Score'.toUpperCase(),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
                 ),
               ),
-
-              // Right: circular "+" button
               GestureDetector(
                 onTap: onAdd,
                 child: Container(
-                  width: 40,
-                  height: 40,
+                  width: 28,
+                  height: 28,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: Colors.white.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.add,
-                    color: AppColors.cream,
-                    size: 22,
+                    color: Colors.white,
+                    size: 16,
                   ),
                 ),
               ),
             ],
           ),
 
-          // ── Bottom: next reward text ──
-          Text(
-            'Next reward at $nextRewardAt coins',
-            style: TextStyle(
-              color: AppColors.cream.withValues(alpha: 0.4),
-              fontSize: 13,
-            ),
+          // ── Bottom: Score and reward text ──
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$score',
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  height: 1.0,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Next reward at $nextRewardAt',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  fontSize: 9,
+                ),
+              ),
+            ],
           ),
         ],
       ),
