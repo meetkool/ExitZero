@@ -108,6 +108,7 @@ class BentoCard extends StatelessWidget {
   Widget _buildContent() {
     return Stack(
       children: [
+        // ignore: use_null_aware_elements
         if (backgroundDecoration != null) backgroundDecoration!,
         Padding(
           padding: padding,

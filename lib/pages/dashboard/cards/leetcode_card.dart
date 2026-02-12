@@ -61,15 +61,15 @@ class _LeetCodeCardState extends State<LeetCodeCard>
     return BentoCard(
       height: 150,
       padding: const EdgeInsets.all(16),
-      gradient: LinearGradient(
-        begin: const Alignment(-0.5, -1),
-        end: const Alignment(0.5, 1),
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
         colors: [
-          AppColors.burnt.withValues(alpha: 0.15),
-          const Color(0xFF1E0000).withValues(alpha: 0.4),
+          Color(0xFF1a0500),
+          Colors.black,
         ],
       ),
-      border: Border.all(color: AppColors.burnt.withValues(alpha: 0.3)),
+      border: Border.all(color: AppColors.burnt.withValues(alpha: 0.2)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_button.dart';
 import '../widgets/app_text_field.dart';
+import '../services/auth_service.dart';
+import '../services/token_storage.dart';
 
 /// Sign-up page: Full Name, Email, Password.
 class SignupPage extends StatefulWidget {
@@ -16,16 +17,59 @@ class _SignupPageState extends State<SignupPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
 
-  void _handleSignup() {
-    if (_formKey.currentState!.validate()) {
-      // TODO: Replace with actual registration logic
-      // New registration → go to onboarding (profile setup)
+  Future<void> _handleSignup() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. Register
+      await AuthService.register(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        name: _nameController.text.trim(),
+      );
+
+      // 2. Auto-login after registration
+      final loginData = await AuthService.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      final token = loginData['access_token'] as String;
+
+      // 3. Save token + user data
+      await TokenStorage.saveToken(token);
+      final user = await AuthService.getMe(token);
+      await TokenStorage.saveUserData(user);
+
+      if (!mounted) return;
+
+      // 4. New registration → go to onboarding (profile setup)
       Navigator.pushNamedAndRemoveUntil(
         context,
         '/onboarding',
         (route) => false,
       );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppColors.burnt,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Network error. Please check your connection.'),
+          backgroundColor: AppColors.burnt,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -128,12 +172,43 @@ class _SignupPageState extends State<SignupPage> {
               // ── Create Account button ──
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: AppFilledButton(
-                  label: 'CREATE ACCOUNT',
-                  onPressed: _handleSignup,
-                  backgroundColor: AppColors.orange,
-                  textColor: AppColors.cream,
-                  trailingIcon: Icons.arrow_forward,
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _handleSignup,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.orange,
+                      disabledBackgroundColor: AppColors.orange.withValues(alpha: 0.6),
+                      foregroundColor: AppColors.cream,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      elevation: 4,
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation(AppColors.cream),
+                            ),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('CREATE ACCOUNT'),
+                              SizedBox(width: 8),
+                              Icon(Icons.arrow_forward, size: 20),
+                            ],
+                          ),
+                  ),
                 ),
               ),
               const SizedBox(height: 24),

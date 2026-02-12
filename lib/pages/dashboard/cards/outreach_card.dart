@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../theme/app_theme.dart';
 import '../../../widgets/bento_card.dart';
 
 /// Outreach card showing emails sent / target.
@@ -16,8 +15,10 @@ class OutreachCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BentoCard(
-      height: 150,
-      glassmorphism: true,
+      height: 120, // Match HTML height
+      glassmorphism: false,
+      backgroundColor: Colors.white.withValues(alpha: 0.04), // tile bg
+      border: Border.all(color: Colors.white.withValues(alpha: 0.08)), // tile border
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -25,13 +26,13 @@ class OutreachCard extends StatelessWidget {
         children: [
           // ── Top: send icon circle ──
           Container(
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              color: AppColors.teal.withValues(alpha: 0.2),
+              color: const Color(0xFF126782).withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.send, color: AppColors.teal, size: 20),
+            child: const Icon(Icons.send, color: Color(0xFF126782), size: 18),
           ),
 
           // ── Bottom: count + label ──
@@ -47,13 +48,12 @@ class OutreachCard extends StatelessWidget {
                   height: 1.2,
                 ),
               ),
-              const SizedBox(height: 4),
               Text(
                 'Emails Sent',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 10,
                   fontWeight: FontWeight.w500,
-                  color: AppColors.cream.withValues(alpha: 0.6),
+                  color: Colors.white.withValues(alpha: 0.5),
                 ),
               ),
             ],

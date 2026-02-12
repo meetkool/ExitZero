@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_button.dart';
 import '../widgets/app_text_field.dart';
+import '../services/auth_service.dart';
 
 /// Forgot-password page with two states: input form and success confirmation.
 class ForgotPasswordPage extends StatefulWidget {
@@ -14,8 +14,9 @@ class ForgotPasswordPage extends StatefulWidget {
 class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final _emailController = TextEditingController();
   bool _linkSent = false;
+  bool _isLoading = false;
 
-  void _sendResetLink() {
+  Future<void> _sendResetLink() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -26,7 +27,32 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       );
       return;
     }
-    setState(() => _linkSent = true);
+
+    setState(() => _isLoading = true);
+
+    try {
+      await AuthService.forgotPassword(email);
+      if (!mounted) return;
+      setState(() => _linkSent = true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppColors.burnt,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Network error. Please check your connection.'),
+          backgroundColor: AppColors.burnt,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -103,10 +129,36 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 24),
-              AppFilledButton(
-                label: 'SEND RESET LINK',
-                onPressed: _sendResetLink,
-                backgroundColor: AppColors.orange,
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _sendResetLink,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.orange,
+                    disabledBackgroundColor: AppColors.orange.withValues(alpha: 0.6),
+                    foregroundColor: AppColors.cream,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                    elevation: 4,
+                    textStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation(AppColors.cream),
+                          ),
+                        )
+                      : const Text('SEND RESET LINK'),
+                ),
               ),
             ],
           ),
@@ -134,7 +186,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     );
   }
 
-  /// Success state: shows confirmation + prototype link to reset page.
+  /// Success state: shows confirmation.
   Widget _buildSuccessView() {
     return Center(
       child: Padding(
@@ -207,22 +259,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 child: const Text(
                   'Back to Login',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Prototype shortcut to reset-password page
-            TextButton(
-              onPressed: () {
-                Navigator.pushReplacementNamed(context, '/reset-password');
-              },
-              child: Text(
-                '(Prototype: Click Link)',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.cream.withValues(alpha: 0.4),
-                  decoration: TextDecoration.underline,
                 ),
               ),
             ),

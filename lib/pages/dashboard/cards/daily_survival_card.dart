@@ -18,121 +18,112 @@ class DailySurvivalCard extends StatelessWidget {
     this.onTap,
   });
 
-  Color get _statusColor {
-    switch (status.toLowerCase()) {
-      case 'safe':
-        return const Color(0xFF4ADE80); // green-400
-      case 'at risk':
-        return AppColors.burnt;
-      default:
-        return AppColors.orange;
-    }
-  }
-
-  Color get _statusBg {
-    switch (status.toLowerCase()) {
-      case 'safe':
-        return const Color(0xFF22C55E).withValues(alpha: 0.2); // green-500/20
-      case 'at risk':
-        return AppColors.burnt.withValues(alpha: 0.2);
-      default:
-        return AppColors.orange.withValues(alpha: 0.2);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final progress = percentage.clamp(0, 100) / 100.0;
 
     return BentoCard(
-      height: 160,
-      glassmorphism: true,
-      padding: const EdgeInsets.all(20),
+      height: 140, // Match HTML height
+      glassmorphism:
+          false, // Turn off default glassmorphism to control background precisely
+      backgroundColor: Colors.white.withValues(alpha: 0.04),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      padding: const EdgeInsets.all(24),
       onTap: onTap,
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // ── Left column ──
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Top: title + percentage + badge
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Daily Survival',
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'Daily Survival',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$percentage%',
+                style: const TextStyle(
+                  fontSize: 42,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  height: 1.0,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1d3326),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'Safe',
                       style: TextStyle(
-                        color: AppColors.cream.withValues(alpha: 0.7),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$percentage%',
-                      style: const TextStyle(
-                        fontSize: 40,
+                        color: Color(0xFF4ade80),
+                        fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        height: 1.1,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: _statusBg,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        status,
-                        style: TextStyle(
-                          color: _statusColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // Bottom: time remaining
-                Text(
-                  timeRemaining,
-                  style: TextStyle(
-                    color: AppColors.cream.withValues(alpha: 0.5),
-                    fontSize: 12,
-                    fontFamily: 'monospace',
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  Text(
+                    timeRemaining,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.3),
+                      fontSize: 11,
+                      fontFamily:
+                          'monospace', // Ensure Roboto Mono is used if available scheme matches
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
 
           // ── Right: circular progress ring ──
           SizedBox(
-            width: 112,
-            height: 112,
+            width: 90, // Adjusted size to fit layout better
+            height: 90,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 CustomPaint(
-                  size: const Size(112, 112),
+                  size: const Size(90, 90),
                   painter: _ProgressRingPainter(
                     progress: progress,
-                    trackColor: Colors.white.withValues(alpha: 0.1),
+                    trackColor: Colors.white.withValues(alpha: 0.05),
                     progressColor: AppColors.orange,
                     strokeWidth: 8,
                   ),
                 ),
-                const Icon(
-                  Icons.local_fire_department,
-                  color: AppColors.orange,
-                  size: 28,
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.orange.withValues(alpha: 0.8),
+                        blurRadius: 8,
+                        spreadRadius: -2,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.local_fire_department,
+                    color: AppColors.orange,
+                    size: 24,
+                  ),
                 ),
               ],
             ),
