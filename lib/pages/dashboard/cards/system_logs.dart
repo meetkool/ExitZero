@@ -61,7 +61,9 @@ class _SystemLogsState extends State<SystemLogs> {
   @override
   Widget build(BuildContext context) {
     return BentoCard(
-      glassmorphism: true,
+      glassmorphism: false,
+      backgroundColor: Colors.white.withValues(alpha: 0.04),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.08)), // tile border
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,10 +73,10 @@ class _SystemLogsState extends State<SystemLogs> {
           Text(
             'SYSTEM LOGS',
             style: TextStyle(
-              color: AppColors.teal,
-              fontSize: 12,
+              color: const Color(0xFF126782),
+              fontSize: 10,
               fontWeight: FontWeight.bold,
-              letterSpacing: 2,
+              letterSpacing: 2, // tracking updated
             ),
           ),
           const SizedBox(height: 16),
@@ -96,22 +98,22 @@ class _SystemLogsState extends State<SystemLogs> {
                           horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: isActive
-                            ? AppColors.teal.withValues(alpha: 0.2)
-                            : Colors.transparent,
+                            ? const Color(0xFF126782).withValues(alpha: 0.2)
+                            : Colors.white.withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: isActive
-                              ? AppColors.teal
+                              ? const Color(0xFF126782)
                               : Colors.transparent,
                         ),
                       ),
                       child: Text(
                         widget.filters[i],
                         style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                          fontWeight: FontWeight.normal,
                           color: isActive
-                              ? AppColors.teal
+                              ? const Color(0xFF126782)
                               : Colors.white.withValues(alpha: 0.4),
                         ),
                       ),
@@ -139,9 +141,9 @@ class _SystemLogsState extends State<SystemLogs> {
       children: [
         // Vertical line
         Positioned(
-          left: 5,
-          top: 8,
-          bottom: 8,
+          left: 4, // Updated left position
+          top: 4, // Updated top/bottom according to design
+          bottom: 4,
           child: Container(
             width: 1,
             color: Colors.white.withValues(alpha: 0.1),
@@ -161,18 +163,24 @@ class _SystemLogsState extends State<SystemLogs> {
                 children: [
                   // Dot
                   Container(
-                    width: 10,
-                    height: 10,
+                    width: 8,
+                    height: 8,
                     margin: const EdgeInsets.only(top: 4),
                     decoration: BoxDecoration(
                       color: entry.isActive
-                          ? AppColors.teal
+                          ? const Color(0xFF126782)
                           : Colors.white.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.black, width: 3),
+                      border: Border.all(color: Colors.black, width: 2), // ring-4 ring-black simulated with border (or thicker border)
+                      boxShadow: const [
+                         BoxShadow(
+                           color: Colors.black,
+                           spreadRadius: 2, // ring effect
+                         )
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12), // Gap 3 (12px)
 
                   // Text
                   Expanded(
@@ -182,17 +190,17 @@ class _SystemLogsState extends State<SystemLogs> {
                         Text(
                           entry.message,
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 12,
                             color: entry.isActive
                                 ? AppColors.cream
                                 : Colors.white.withValues(alpha: 0.5),
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        // const SizedBox(height: 0),
                         Text(
                           entry.time,
                           style: TextStyle(
-                            fontSize: 10,
+                            fontSize: 9,
                             fontFamily: 'monospace',
                             color: Colors.white.withValues(alpha: 0.3),
                           ),

@@ -1,1 +1,238 @@
-kool
+ /api/v1/interviews/
+
+    ┌────────┬────────────────┬──────────────────────────────────────────────────────────────────────────────────────┐
+    │ Method │ Endpoint       │ Description                                                                          │
+    ├────────┼────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+    │ POST   │ /              │ Create Interview - Schedules a new interview with automatic double-booking detection │
+    │ GET    │ /              │ List Interviews - Get all your interviews. Query: ?status=scheduled                  │
+    │ GET    │ /{id}          │ Get Interview - Get details of a specific interview                                  │
+    │ PUT    │ /{id}          │ Update Interview - Modify an existing scheduled interview                            │
+    │ POST   │ /{id}/check-in │ Check In - Verify attendance (Window: -5min to +10min from start)                    │
+    │ DELETE │ /{id}          │ Cancel Interview - Delete scheduled interview                                        │
+    └────────┴────────────────┴──────────────────────────────────────────────────────────────────────────────────────┘
+
+
+
+    Now I have a clear picture of the interview status system. Based on my analysis of the code, here are the interview status values and their meanings:
+
+    Interview Status System
+
+    The interview statuses are string values (not formal enums) with the following possible values:
+
+
+
+ /api/v1/interviews/
+
+    ┌────────┬────────────────┬──────────────────────────────────────────────────────────────────────────────────────┐
+    │ Method │ Endpoint       │ Description                                                                          │
+    ├────────┼────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+    │ POST   │ /              │ Create Interview - Schedules a new interview with automatic double-booking detection │
+    │ GET    │ /              │ List Interviews - Get all your interviews. Query: ?status=scheduled                  │
+    │ GET    │ /{id}          │ Get Interview - Get details of a specific interview                                  │
+    │ PUT    │ /{id}          │ Update Interview - Modify an existing scheduled interview                            │
+    │ POST   │ /{id}/check-in │ Check In - Verify attendance (Window: -5min to +10min from start)                    │
+    │ DELETE │ /{id}          │ Cancel Interview - Delete scheduled interview                                        │
+    └────────┴────────────────┴──────────────────────────────────────────────────────────────────────────────────────┘
+
+
+
+    Now I have a clear picture of the interview status system. Based on my analysis of the code, here are the interview status values and their meanings:
+
+    Interview Status System
+
+    The interview statuses are string values (not formal enums) with the following possible values:
+
+    Status Values:
+     1. `"scheduled"` - Default status when an interview is created
+        - The interview is planned but hasn't happened yet
+        - Only interviews with this status can be checked-in, updated, or deleted
+
+     2. `"completed"` - Set when a user successfully checks in
+        - Achieved by calling the POST /api/v1/interviews/{id}/check-in endpoint
+        - User receives +10 coins as reward
+        - Cannot be updated or checked in again
+
+     3. `"missed"` - Set automatically by the background worker
+        - Applied when the worker detects an interview that started more than 10 minutes ago without a check-in
+        - Results in burning the user's staked coins (default: 50 coins)
+        - Cannot be updated or checked in
+
+    Status Transitions:
+     - scheduled → completed (via check-in endpoint)
+     - scheduled → missed (via background worker)
+     - Once an interview is completed or missed, its status cannot be changed
+
+    Business Rules:
+     - Only scheduled interviews can be updated (via the PUT endpoint I added)
+     - Only scheduled interviews can be deleted
+     - Only scheduled interviews can be checked in
+     - The worker continuously monitors for scheduled interviews that become overdue and marks them as missed
+
+    The system is designed so that once an interview moves out of the scheduled state, it becomes immutable to prevent users from gaming the system by changing times after the fact or deleting interviews after they've
+    missed them.
+
+  > give me the brify explaintion fo this api for interval scdule so i can implimnet tot he backend
+
+  ✦ Interview Scheduler API - Brief Implementation Guide
+
+    Base URL: /api/v1/interviews
+
+    Core Endpoints:
+
+    1. Create Interview
+     - POST /
+     - Request Body: {title, company, start_time, time_zone, duration_minutes, platform, meeting_link, reminders, notes, is_mock, stake_amount}
+     - Response: Created interview object
+     - Logic: Checks for double-booking conflicts before scheduling
+
+    2. List Interviews
+     - GET /
+     - Query Params: ?status=scheduled (optional filter)
+     - Response: Array of interview objects
+
+    3. Get Single Interview
+     - GET /{id}
+     - Response: Single interview object
+
+    4. Update Interview (NEW)
+     - PUT /{id}
+     - Request Body: Partial update {title?, company?, start_time?, time_zone?, duration_minutes?, platform?, meeting_link?, reminders?, notes?, is_mock?, stake_amount?}
+     - Rules: Only works for scheduled interviews, checks for conflicts when updating time
+
+    5. Check-In
+     - POST /{id}/check-in
+     - Timing Window: -5min to +10min from start time
+     - Reward: +10 coins on success
+     - Result: Sets status to completed
+
+    6. Cancel Interview
+     - DELETE /{id}
+     - Rules: Only works for scheduled interviews
+
+    Interview Status Lifecycle:
+     - scheduled → completed (via check-in)
+     - scheduled → missed (via background worker after 10min delay)
+     - Once completed or missed, status is final
+
+
+
+      Required Fields for Creation:
+     - title, company, start_time (ISO format), time_zone, platform
+     - Optional: duration_minutes (default: 60), meeting_link, stake_amount (default: 50), is_mock (default: true)
+
+
+
+     Done! I've implemented the complete interview scheduler system. Here's what was created:
+📁 Files Created
+1. app/schemas/interview.py - Pydantic schemas for interview data
+2. app/api/v1/interviews.py - API router with all endpoints
+3. app/worker.py - The Punisher worker for background processing
+🔗 API Endpoints (Base: /api/v1/interviews)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | / | Create interview (with conflict detection) |
+| GET | / | List all interviews (optional ?status=scheduled) |
+| GET | /{id} | Get specific interview |
+| POST | /{id}/check-in | Check in (5min before → 10min after) |
+| DELETE | /{id} | Cancel interview |
+🏗️ PocketBase Schema
+The interviews collection is automatically created on startup with:
+- user (relation to users)
+- title, company, platform, meeting_link
+- start_time, end_time, duration_minutes
+- status (scheduled/completed/missed/cancelled)
+- stake_amount, is_mock, notes, reminders
+👹 The Punisher Worker
+Run it separately:
+python -m app.worker
+Or in production, set it up as a cron job or use Celery/APScheduler.
+The worker:
+- Runs every minute
+- Detects missed interviews (start_time > 10 mins ago)
+- Burns staked coins from users
+- Sends reminders at configured intervals
+💰 Rewards & Punishments
+- Check-in: +10 coins reward
+- Missed: -X coins burned (based on stake_amount)
+
+    Status Values:
+     1. `"scheduled"` - Default status when an interview is created
+        - The interview is planned but hasn't happened yet
+        - Only interviews with this status can be checked-in, updated, or deleted
+
+     2. `"completed"` - Set when a user successfully checks in
+        - Achieved by calling the POST /api/v1/interviews/{id}/check-in endpoint
+        - User receives +10 coins as reward
+        - Cannot be updated or checked in again
+
+     3. `"missed"` - Set automatically by the background worker
+        - Applied when the worker detects an interview that started more than 10 minutes ago without a check-in
+        - Results in burning the user's staked coins (default: 50 coins)
+        - Cannot be updated or checked in
+
+    Status Transitions:
+     - scheduled → completed (via check-in endpoint)
+     - scheduled → missed (via background worker)
+     - Once an interview is completed or missed, its status cannot be changed
+
+    Business Rules:
+     - Only scheduled interviews can be updated (via the PUT endpoint I added)
+     - Only scheduled interviews can be deleted
+     - Only scheduled interviews can be checked in
+     - The worker continuously monitors for scheduled interviews that become overdue and marks them as missed
+
+    The system is designed so that once an interview moves out of the scheduled state, it becomes immutable to prevent users from gaming the system by changing times after the fact or deleting interviews after they've
+    missed them.
+
+  > give me the brify explaintion fo this api for interval scdule so i can implimnet tot he backend
+
+  ✦ Interview Scheduler API - Brief Implementation Guide
+
+    Base URL: /api/v1/interviews
+
+    Core Endpoints:
+
+    1. Create Interview
+     - POST /
+     - Request Body: {title, company, start_time, time_zone, duration_minutes, platform, meeting_link, reminders, notes, is_mock, stake_amount}
+     - Response: Created interview object
+     - Logic: Checks for double-booking conflicts before scheduling
+
+    2. List Interviews
+     - GET /
+     - Query Params: ?status=scheduled (optional filter)
+     - Response: Array of interview objects
+
+    3. Get Single Interview
+     - GET /{id}
+     - Response: Single interview object
+
+    4. Update Interview (NEW)
+     - PUT /{id}
+     - Request Body: Partial update {title?, company?, start_time?, time_zone?, duration_minutes?, platform?, meeting_link?, reminders?, notes?, is_mock?, stake_amount?}
+     - Rules: Only works for scheduled interviews, checks for conflicts when updating time
+
+    5. Check-In
+     - POST /{id}/check-in
+     - Timing Window: -5min to +10min from start time
+     - Reward: +10 coins on success
+     - Result: Sets status to completed
+
+    6. Cancel Interview
+     - DELETE /{id}
+     - Rules: Only works for scheduled interviews
+
+    Interview Status Lifecycle:
+     - scheduled → completed (via check-in)
+     - scheduled → missed (via background worker after 10min delay)
+     - Once completed or missed, status is final
+
+
+
+      Required Fields for Creation:
+     - title, company, start_time (ISO format), time_zone, platform
+     - Optional: duration_minutes (default: 60), meeting_link, stake_amount (default: 50), is_mock (default: true)
+
+
+
+     

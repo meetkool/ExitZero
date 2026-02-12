@@ -69,77 +69,112 @@ class _AccountabilityCardState extends State<AccountabilityCard>
   Widget build(BuildContext context) {
     return BentoCard(
       height: 100,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      backgroundColor: const Color(0xFF220000),
-      border: Border.all(color: AppColors.burnt),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0), // Vertical padding handled by flex alignment
+      gradient: const LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          Color(0xFF2a0a00),
+          Color(0xFF150500),
+        ],
+      ),
+      border: Border.all(color: AppColors.burnt.withValues(alpha: 0.4)),
       boxShadow: [
         BoxShadow(
           color: AppColors.burnt.withValues(alpha: 0.1),
           blurRadius: 30,
-          spreadRadius: -5,
+          spreadRadius: 0,
+          // Inset shadow is not directly supported by BoxShadow, simulating with background decoration if needed, 
+          // or relying on the gradient and inner elements. 
+          // For now, outer glow is close enough or we can add an inner container.
         ),
       ],
       backgroundDecoration: _buildScanline(),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Stack(
         children: [
-          // Left: label + timer
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
+           // Inner shadow simulation (optional, but adds depth)
+           Positioned.fill(
+             child: Container(
+               decoration: BoxDecoration(
+                 gradient: RadialGradient(
+                   center: Alignment.center,
+                   radius: 0.8,
+                    colors: [
+                      AppColors.burnt.withValues(alpha: 0.1),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 1.0],
+                 ),
+               ),
+             ),
+           ),
+           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
+              // Left: label + timer
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  FadeTransition(
-                    opacity: _pulseController
-                        .drive(Tween(begin: 0.4, end: 1.0)),
-                    child: const Icon(Icons.warning,
-                        color: AppColors.burnt, size: 14),
+                  Row(
+                    children: [
+                      FadeTransition(
+                        opacity: _pulseController
+                            .drive(Tween(begin: 0.4, end: 1.0)),
+                        child: const Icon(Icons.warning,
+                            color: AppColors.burnt, size: 14),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'ACCOUNTABILITY ENGINE',
+                        style: TextStyle(
+                          color: AppColors.burnt,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(height: 2),
                   Text(
-                    'ACCOUNTABILITY ENGINE',
+                    _countdown,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w500,
+                      fontFamily: 'monospace',
+                      letterSpacing: -0.5,
+                      height: 1.2,
+                    ),
+                  ),
+                  Text(
+                    'Time remaining',
                     style: TextStyle(
-                      color: AppColors.burnt,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.5,
+                      color: AppColors.burnt.withValues(alpha: 0.4),
+                      fontSize: 9,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+
+              // Right: ARMED badge
               Text(
-                _countdown,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w500,
-                  fontFamily: 'monospace',
-                  letterSpacing: -0.5,
-                  height: 1,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Time remaining',
+                'ARMED',
                 style: TextStyle(
-                  color: AppColors.burnt.withValues(alpha: 0.5),
-                  fontSize: 10,
+                  color: AppColors.burnt.withValues(alpha: 0.9),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 4,
+                  shadows: [
+                    Shadow(
+                      color: AppColors.burnt.withValues(alpha: 0.5),
+                      blurRadius: 10,
+                    ),
+                  ],
                 ),
               ),
             ],
-          ),
-
-          // Right: ARMED badge
-          Text(
-            'ARMED',
-            style: TextStyle(
-              color: AppColors.burnt.withValues(alpha: 0.8),
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 4,
-            ),
           ),
         ],
       ),

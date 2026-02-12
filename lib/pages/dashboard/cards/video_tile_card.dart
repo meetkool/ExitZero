@@ -88,32 +88,28 @@ class _VideoTileCardState extends State<VideoTileCard>
   @override
   Widget build(BuildContext context) {
     return BentoCard(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.zero,
       borderRadius: 24,
-      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.5),
-          blurRadius: 40,
-          spreadRadius: -10,
-          offset: const Offset(0, 10),
-        ),
-      ],
-      backgroundDecoration: Positioned.fill(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            _buildVideoLayer(),
-            _buildGradientOverlay(),
-          ],
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      border: Border.all(color: Colors.white.withValues(alpha: 0.08)), // Updated border opacity
+      backgroundColor: Colors.transparent, // Ensure no background color interferes
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          if (widget.isLive) _buildLiveBadge(),
-          if (_shouldShowInfo()) _buildTextBlock(),
+          _buildVideoLayer(),
+          _buildGradientOverlay(),
+          // Content layer if needed
+          if (widget.isLive || _shouldShowInfo())
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                   if (widget.isLive) _buildLiveBadge() else const SizedBox(),
+                   if (_shouldShowInfo()) _buildTextBlock() else const SizedBox(),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -129,12 +125,12 @@ class _VideoTileCardState extends State<VideoTileCard>
   Widget _buildVideoLayer() {
     if (!_controller.value.isInitialized) {
       return Container(
-        color: Colors.black.withValues(alpha: 0.6),
+        color: Colors.black,
       );
     }
 
     return Opacity(
-      opacity: widget.videoOpacity,
+      opacity: widget.videoOpacity, // 0.6 in HTML
       child: FittedBox(
         fit: BoxFit.cover,
         child: SizedBox(
@@ -148,14 +144,16 @@ class _VideoTileCardState extends State<VideoTileCard>
 
   Widget _buildGradientOverlay() {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
           colors: [
-            Colors.black.withValues(alpha: 0.1),
-            Colors.black.withValues(alpha: 0.9),
+            Colors.black,
+            Colors.transparent,
+            Colors.transparent,
           ],
+          stops: [0.0, 0.5, 1.0],
         ),
       ),
     );

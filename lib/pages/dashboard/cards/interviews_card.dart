@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../theme/app_theme.dart';
 import '../../../widgets/bento_card.dart';
 
 /// Full-width mock-interview card with a company letter badge on the left.
@@ -16,10 +15,14 @@ class InterviewsCard extends StatelessWidget {
   /// How many days until the interview.
   final int daysLeft;
 
+  /// Role title (e.g. "SDE-1").
+  final String role;
+
   const InterviewsCard({
     super.key,
     this.companyLetter = 'G',
     this.title = 'Google Mock',
+    this.role = 'System Design',
     this.schedule = 'Thursday, 10:00 AM',
     this.daysLeft = 2,
   });
@@ -27,14 +30,16 @@ class InterviewsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BentoCard(
-      height: 100,
-      glassmorphism: true,
+      height: 90, // Match HTML
+      glassmorphism: false,
+      backgroundColor: Colors.white.withValues(alpha: 0.04), // tile bg
+      border: Border.all(color: Colors.white.withValues(alpha: 0.08)), // tile border
       padding: EdgeInsets.zero,
       child: Row(
         children: [
           // ── Left: company letter panel ──
           Container(
-            width: 80,
+            width: 70,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.05),
               border: Border(
@@ -47,7 +52,7 @@ class InterviewsCard extends StatelessWidget {
             child: Text(
               companyLetter,
               style: TextStyle(
-                fontSize: 30,
+                fontSize: 24,
                 fontWeight: FontWeight.w900,
                 color: Colors.white.withValues(alpha: 0.2),
               ),
@@ -69,17 +74,26 @@ class InterviewsCard extends StatelessWidget {
                       Text(
                         title,
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.cream,
+                          color: Colors.white,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
+                      Text(
+                        role,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: 0.6),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
                       Text(
                         schedule,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.teal,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF126782),
+                          // fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -93,7 +107,7 @@ class InterviewsCard extends StatelessWidget {
                       Text(
                         '$daysLeft days',
                         style: const TextStyle(
-                          fontSize: 20,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
@@ -102,8 +116,8 @@ class InterviewsCard extends StatelessWidget {
                       Text(
                         'LEFT',
                         style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
                           color: Colors.white.withValues(alpha: 0.4),
                           letterSpacing: 1.5,
                         ),
