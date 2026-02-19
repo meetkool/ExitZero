@@ -12,13 +12,19 @@ import 'dashboard/cards/interviews_card.dart';
 import 'dashboard/cards/system_logs.dart';
 import 'dashboard/cards/video_tile_card.dart';
 import 'dashboard/cards/life_score_card.dart';
-import 'dashboard/cards/life_score_card.dart';
 import '../pages/profile_page.dart';
 import '../../services/interview_service.dart';
 import '../../models/mock_interview.dart';
 import 'dashboard/cards/interviews_carousel.dart';
 import 'package:intl/intl.dart';
 import 'mock_interview_detail_page.dart'; // For navigation from modal
+import '../models/app_notification.dart';
+import '../services/notification_store.dart';
+import '../services/ntfy_service.dart';
+import '../../services/local_notification_service.dart';
+import '../../services/notification_manager.dart';
+import 'notifications_page.dart';
+import 'dashboard/cards/notification_card.dart';
 
 /// Main dashboard screen — bento-grid layout with FAB.
 ///
@@ -50,9 +56,14 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _isLoadingInterviews = true;
   StreamSubscription? _interviewSubscription;
 
+  // Notification State
+  StreamSubscription? _notificationSubscription;
+
   @override
   void initState() {
     super.initState();
+    LocalNotificationService.initialize();
+    NotificationManager().initialize();
     _loadLayout();
     _fetchTodaysInterviews();
     
@@ -62,11 +73,20 @@ class _DashboardPageState extends State<DashboardPage> {
         _fetchTodaysInterviews();
       }
     });
+
+    _notificationSubscription = NotificationManager().notificationsStream.listen((_) {
+      if (mounted) {
+        setState(() {
+          _layoutVersion++;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
     _interviewSubscription?.cancel();
+    _notificationSubscription?.cancel();
     super.dispose();
   }
 
@@ -91,6 +111,15 @@ class _DashboardPageState extends State<DashboardPage> {
         setState(() => _isLoadingInterviews = false);
       }
     }
+  }
+
+  void _handleNotificationTap() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const NotificationsPage(),
+      ),
+    ); 
   }
 
   Future<void> _loadLayout() async {
@@ -138,6 +167,18 @@ class _DashboardPageState extends State<DashboardPage> {
 
   List<BentoGridItem> _defaultItems() {
     return [
+      // Notifications
+      BentoGridItem(
+        id: 'notifications',
+        columnSpan: 1,
+        height: 140,
+        minHeight: 120,
+        maxHeight: 240,
+        card: NotificationCard(
+          notifications: NotificationManager().notifications,
+          onTap: _handleNotificationTap,
+        ),
+      ),
       // Daily Survival
       const BentoGridItem(
         id: 'survival',
