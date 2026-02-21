@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import '../models/app_notification.dart';
 import 'notification_store.dart';
 import 'ntfy_service.dart';
+import 'local_notification_service.dart';
 
 class NotificationManager {
   // Singleton
@@ -13,7 +15,6 @@ class NotificationManager {
   final _controller = StreamController<List<AppNotification>>.broadcast();
   List<AppNotification> _notifications = [];
   bool _initialized = false;
-  late NtfyListener _ntfyListener;
 
   Stream<List<AppNotification>> get notificationsStream => _controller.stream;
   List<AppNotification> get notifications => List.unmodifiable(_notifications);
@@ -21,17 +22,17 @@ class NotificationManager {
   Future<void> initialize() async {
     if (_initialized) return;
     
-    // Load stored notifications
+    // Load stored notifications initially
     _notifications = await NotificationStore.load();
     _notify();
 
-    // Start listening to Ntfy
-    _ntfyListener = NtfyListener.withCallback(onNotification: (n) {
-      _addNotification(n);
+    // The background service is handling the SSE connection in another isolate.
+    // Listen to updates from the background service to refresh UI.
+    FlutterBackgroundService().on('update').listen((event) async {
+       // Refresh from store
+       _notifications = await NotificationStore.load();
+       _notify();
     });
-    
-    // Start listener asynchronously
-    _ntfyListener.start();
     
     _initialized = true;
   }
@@ -40,8 +41,20 @@ class NotificationManager {
     // Avoid duplicates if ID matches existing
     if (_notifications.any((existing) => existing.id == n.id)) return;
     
+    NotificationStore.saveLastId(n.id);
+
     _notifications.insert(0, n);
     _saveAndNotify();
+
+    // Prevent spam on startup for old messages
+    final isOld = n.time.isBefore(DateTime.now().subtract(const Duration(minutes: 5)));
+    if (!n.isRead && !isOld) {
+      LocalNotificationService.showNotification(
+        id: n.id.hashCode,
+        title: n.title,
+        body: n.message,
+      );
+    }
   }
 
   Future<void> markAsRead(String id) async {
@@ -79,7 +92,6 @@ class NotificationManager {
   }
 
   void dispose() {
-    _ntfyListener.stop();
     _controller.close();
   }
 }

@@ -3,8 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/app_notification.dart';
-import 'local_notification_service.dart';
-
 const String kTopic  = "exitzero-notifications-worker"; // Must match worker.js
 const String kServer = "https://ntfy.sh";
 
@@ -36,18 +34,11 @@ class NtfyListener {
           try {
             final data = jsonDecode(chunk);
             if (data["event"] == "message") {
-              final notif = AppNotification.fromNtfy(data);
-              onNotification(notif);
-              
-              // Trigger local system notification
-              LocalNotificationService.showNotification(
-                id: notif.id.hashCode,
-                title: notif.title,
-                body: notif.message,
-              );
-
-              since = notif.id; // resume from last received
-            }
+               final notif = AppNotification.fromNtfy(data);
+               onNotification(notif);
+               
+               since = notif.id; // resume from last received
+             }
           } catch (e) {
             debugPrint("Error processing notification: $e");
           }
