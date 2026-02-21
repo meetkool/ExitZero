@@ -105,51 +105,56 @@ void onStart(ServiceInstance service) async {
       await NotificationStore.save(stored);
       await NotificationStore.saveLastId(n.id);
       
+      // Tell foreground UI to update immediately before hitting any risky native audio playing
+      service.invoke('update');
+
       // 2. Trigger actual visual notification if fresh
       final isOld = n.time.isBefore(DateTime.now().subtract(const Duration(minutes: 5)));
       if (!n.isRead && !isOld) {
-        // If it's an alarm tag, trigger the full screen alarm
         if (n.tags.contains('alarm')) {
           print('TRIGGERING NATIVE ALARM NOW');
-          final alarmSettings = AlarmSettings(
-            id: n.id.hashCode,
-            dateTime: DateTime.now().add(const Duration(seconds: 1)), // Add buffer to avoid "past time" error
-            assetAudioPath: 'assets/alarm.mp3',
-            loopAudio: true,
-            vibrate: true,
-            volumeSettings: VolumeSettings.fade(
-              volume: 1.0,
-              fadeDuration: const Duration(seconds: 3),
-            ),
-            notificationSettings: NotificationSettings(
-              title: n.title,
-              body: n.message,
-            ),
-            warningNotificationOnKill: true,
-            androidFullScreenIntent: true,
-          );
-          await Alarm.set(alarmSettings: alarmSettings);
+          try {
+            final alarmSettings = AlarmSettings(
+              id: n.id.hashCode,
+              dateTime: DateTime.now().add(const Duration(seconds: 1)),
+              assetAudioPath: 'assets/alarm.mp3',
+              loopAudio: true,
+              vibrate: true,
+              // Simplifying volume settings for WayDroid emulator stability
+              volumeSettings: const VolumeSettings.fixed(volume: 1.0),
+              notificationSettings: NotificationSettings(
+                title: n.title,
+                body: n.message,
+              ),
+              warningNotificationOnKill: false,
+              androidFullScreenIntent: true,
+            );
+            await Alarm.set(alarmSettings: alarmSettings);
+          } catch (e) {
+            print("Alarm.set failed: \$e");
+          }
         } else {
           // Normal Notification
-          await flutterLocalNotificationsPlugin.show(
-            n.id.hashCode,
-            n.title,
-            n.message,
-            const NotificationDetails(
-              android: AndroidNotificationDetails(
-                'exitzero_channel_id',
-                'ExitZero Notifications',
-                importance: Importance.max,
-                priority: Priority.high,
-                ticker: 'ticker',
+          try {
+            await flutterLocalNotificationsPlugin.show(
+              n.id.hashCode,
+              n.title,
+              n.message,
+              const NotificationDetails(
+                android: AndroidNotificationDetails(
+                  'exitzero_channel_id',
+                  'ExitZero Notifications',
+                  importance: Importance.max,
+                  priority: Priority.high,
+                  ticker: 'ticker',
+                ),
               ),
-            ),
-          );
+            );
+          } catch (e) {
+            print("LocalNotification failed: \$e");
+          }
         }
       }
-      
-      // We can also tell the foreground UI to update itself if it is alive
-      service.invoke('update');
     }
   });
 

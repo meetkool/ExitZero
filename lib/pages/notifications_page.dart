@@ -31,6 +31,7 @@ class NotificationsPage extends StatelessWidget {
         ],
       ),
       body: StreamBuilder<List<AppNotification>>(
+        initialData: NotificationManager().notifications,
         stream: NotificationManager().notificationsStream,
         builder: (context, snapshot) {
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
