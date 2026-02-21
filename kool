@@ -11,7 +11,7 @@
     │ DELETE │ /{id}          │ Cancel Interview - Delete scheduled interview                                        │
     └────────┴────────────────┴──────────────────────────────────────────────────────────────────────────────────────┘
 
-
+lol
 
     Now I have a clear picture of the interview status system. Based on my analysis of the code, here are the interview status values and their meanings:
 
