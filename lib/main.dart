@@ -5,11 +5,14 @@ import 'app.dart';
 import 'services/dev_http_overrides.dart';
 import 'services/background_service.dart';
 
+import 'package:alarm/alarm.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (kDebugMode) {
     HttpOverrides.global = DevHttpOverrides();
   }
+  await Alarm.init();
   await initializeBackgroundService();
   runApp(const ExitZeroApp());
 }

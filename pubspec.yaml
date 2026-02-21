@@ -47,6 +47,7 @@ dependencies:
   share_plus: ^12.0.1
   flutter_local_notifications: ^18.0.1
   flutter_background_service: ^5.1.0
+  alarm: ^5.2.1
 
 dev_dependencies:
   flutter_test:
@@ -92,6 +93,7 @@ flutter:
   assets:
     - assets/joji_visualizer.mp4
     - assets/app_logo.png
+    - assets/alarm.mp3
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

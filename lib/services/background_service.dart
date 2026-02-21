@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:alarm/alarm.dart';
 import 'ntfy_service.dart';
 import 'notification_store.dart';
 import 'local_notification_service.dart';
@@ -59,6 +60,7 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
   WidgetsFlutterBinding.ensureInitialized();
+  await Alarm.init();
 
   // Bring service to foreground
   if (service is AndroidServiceInstance) {
@@ -106,21 +108,44 @@ void onStart(ServiceInstance service) async {
       // 2. Trigger actual visual notification if fresh
       final isOld = n.time.isBefore(DateTime.now().subtract(const Duration(minutes: 5)));
       if (!n.isRead && !isOld) {
-        // Because we are in an isolate, we explicitly call the plugin to show the alert
-        await flutterLocalNotificationsPlugin.show(
-          n.id.hashCode,
-          n.title,
-          n.message,
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'exitzero_channel_id',
-              'ExitZero Notifications',
-              importance: Importance.max,
-              priority: Priority.high,
-              ticker: 'ticker',
+        // If it's an alarm tag, trigger the full screen alarm
+        if (n.tags.contains('alarm')) {
+          print('TRIGGERING NATIVE ALARM NOW');
+          final alarmSettings = AlarmSettings(
+            id: n.id.hashCode,
+            dateTime: DateTime.now().add(const Duration(seconds: 1)), // Add buffer to avoid "past time" error
+            assetAudioPath: 'assets/alarm.mp3',
+            loopAudio: true,
+            vibrate: true,
+            volumeSettings: VolumeSettings.fade(
+              volume: 1.0,
+              fadeDuration: const Duration(seconds: 3),
             ),
-          ),
-        );
+            notificationSettings: NotificationSettings(
+              title: n.title,
+              body: n.message,
+            ),
+            warningNotificationOnKill: true,
+            androidFullScreenIntent: true,
+          );
+          await Alarm.set(alarmSettings: alarmSettings);
+        } else {
+          // Normal Notification
+          await flutterLocalNotificationsPlugin.show(
+            n.id.hashCode,
+            n.title,
+            n.message,
+            const NotificationDetails(
+              android: AndroidNotificationDetails(
+                'exitzero_channel_id',
+                'ExitZero Notifications',
+                importance: Importance.max,
+                priority: Priority.high,
+                ticker: 'ticker',
+              ),
+            ),
+          );
+        }
       }
       
       // We can also tell the foreground UI to update itself if it is alive

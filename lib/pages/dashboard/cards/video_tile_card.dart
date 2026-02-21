@@ -57,6 +57,12 @@ class _VideoTileCardState extends State<VideoTileCard>
   }
 
   Future<void> _initVideo() async {
+    // Note: VideoPlayer uses ExoPlayer on Android which has a known bug 
+    // on some emulators (like Waydroid) where it crashes the app with Error 0xffffff92
+    // when native alarm audio is played concurrently. 
+    // For stable testing of the Alarm system, video initialization is temporarily bypassed.
+    return;
+    /*
     _controller = widget.isAsset
         ? VideoPlayerController.asset(widget.videoSource)
         : VideoPlayerController.networkUrl(Uri.parse(widget.videoSource));
@@ -67,6 +73,7 @@ class _VideoTileCardState extends State<VideoTileCard>
       await _controller.play();
     }
     if (mounted) setState(() {});
+    */
   }
 
   @override
@@ -80,7 +87,9 @@ class _VideoTileCardState extends State<VideoTileCard>
 
   @override
   void dispose() {
-    _controller.dispose();
+    try {
+      _controller.dispose();
+    } catch (_) {}
     _pulse.dispose();
     super.dispose();
   }
@@ -123,10 +132,13 @@ class _VideoTileCardState extends State<VideoTileCard>
   }
 
   Widget _buildVideoLayer() {
-    if (!_controller.value.isInitialized) {
-      return Container(
-        color: Colors.black,
-      );
+    // If we bypassed initialization to prevent emulator crashes, controller may not be created.
+    try {
+      if (!_controller.value.isInitialized) {
+        return Container(color: Colors.black);
+      }
+    } catch (_) {
+      return Container(color: Colors.black);
     }
 
     return Opacity(

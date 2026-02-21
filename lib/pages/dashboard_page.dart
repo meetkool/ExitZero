@@ -25,7 +25,9 @@ import '../../services/local_notification_service.dart';
 import '../../services/notification_manager.dart';
 import 'notifications_page.dart';
 import 'dashboard/cards/notification_card.dart';
-
+import 'dashboard/cards/alarm_card.dart';
+import 'package:alarm/alarm.dart';
+import '../pages/alarm_page.dart';
 /// Main dashboard screen — bento-grid layout with FAB.
 ///
 /// Converts to "edit layout" mode when the user long-presses any card.
@@ -190,6 +192,35 @@ class _DashboardPageState extends State<DashboardPage> {
           percentage: 72,
           status: 'Safe',
           timeRemaining: '4 hrs remaining',
+        ),
+      ),
+
+      // Alarm Status
+      BentoGridItem(
+        id: 'alarm_status',
+        columnSpan: 2,
+        height: 110,
+        minHeight: 100,
+        maxHeight: 160,
+        card: AlarmCard(
+          onTap: () async {
+            // First check if an alarm is actively ringing
+            final alarms = await Alarm.getAlarms();
+            if (alarms.isNotEmpty) {
+               Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => AlarmPage(alarmId: alarms.first.id)),
+               );
+            } else {
+               // If none ringing, show normal notifications page filtered to alarms
+               Navigator.push(
+                 context,
+                 MaterialPageRoute(
+                   builder: (context) => const NotificationsPage(filterTag: 'alarm'),
+                 ),
+               );
+            }
+          },
         ),
       ),
 

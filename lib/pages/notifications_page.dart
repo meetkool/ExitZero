@@ -5,7 +5,9 @@ import '../models/app_notification.dart';
 import '../services/notification_manager.dart';
 
 class NotificationsPage extends StatelessWidget {
-  const NotificationsPage({super.key});
+  final String? filterTag;
+
+  const NotificationsPage({super.key, this.filterTag});
 
   @override
   Widget build(BuildContext context) {
@@ -30,24 +32,27 @@ class NotificationsPage extends StatelessWidget {
       ),
       body: StreamBuilder<List<AppNotification>>(
         stream: NotificationManager().notificationsStream,
-        initialData: NotificationManager().notifications,
         builder: (context, snapshot) {
-          final notifications = snapshot.data ?? [];
-          
-          if (notifications.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.notifications_none, size: 64, color: Colors.white.withOpacity(0.2)),
-                  const SizedBox(height: 16),
-                  Text(
-                    "No notifications",
-                    style: TextStyle(color: Colors.white.withOpacity(0.4)),
-                  ),
-                ],
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(
+              child: Text(
+                'No notifications yet',
+                style: TextStyle(color: Colors.white54),
               ),
             );
+          }
+
+          var notifications = snapshot.data!;
+          if (filterTag != null) {
+            notifications = notifications.where((n) => n.tags.contains(filterTag)).toList();
+            if (notifications.isEmpty) {
+              return const Center(
+                child: Text(
+                  'No matching notifications found.',
+                  style: TextStyle(color: Colors.white54),
+                ),
+              );
+            }
           }
 
           return ListView.builder(
