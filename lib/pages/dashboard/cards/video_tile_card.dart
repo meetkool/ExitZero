@@ -60,9 +60,6 @@ class _VideoTileCardState extends State<VideoTileCard>
     // Note: VideoPlayer uses ExoPlayer on Android which has a known bug 
     // on some emulators (like Waydroid) where it crashes the app with Error 0xffffff92
     // when native alarm audio is played concurrently. 
-    // For stable testing of the Alarm system, video initialization is temporarily bypassed.
-    return;
-    /*
     _controller = widget.isAsset
         ? VideoPlayerController.asset(widget.videoSource)
         : VideoPlayerController.networkUrl(Uri.parse(widget.videoSource));
@@ -73,7 +70,6 @@ class _VideoTileCardState extends State<VideoTileCard>
       await _controller.play();
     }
     if (mounted) setState(() {});
-    */
   }
 
   @override
