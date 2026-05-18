@@ -233,7 +233,7 @@ class _DashboardPageState extends State<DashboardPage> {
       const BentoGridItem(
         id: 'leetcode',
         columnSpan: 2,
-        minSpan: 2,
+        minSpan: 1,
         maxSpan: 2,
         height: 290,
         minHeight: 240,

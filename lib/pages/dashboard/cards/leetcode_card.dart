@@ -90,32 +90,38 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
 
   @override
   Widget build(BuildContext context) {
-    return BentoCard(
-      height: double.infinity,
-      padding: const EdgeInsets.all(18),
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF09131B), Color(0xFF08283A)],
-      ),
-      border: Border.all(color: AppColors.teal.withValues(alpha: 0.22)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeader(),
-          const SizedBox(height: 16),
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              child: _buildBody(),
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 280;
+
+        return BentoCard(
+          height: double.infinity,
+          padding: EdgeInsets.all(isCompact ? 14 : 18),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF09131B), Color(0xFF08283A)],
           ),
-        ],
-      ),
+          border: Border.all(color: AppColors.teal.withValues(alpha: 0.22)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(isCompact),
+              SizedBox(height: isCompact ? 12 : 16),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: _buildBody(isCompact),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isCompact) {
     final tone = _statusTone(_status);
     final label = _status == null
         ? 'SYNCING'
@@ -126,8 +132,8 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
     return Row(
       children: [
         Container(
-          width: 42,
-          height: 42,
+          width: isCompact ? 38 : 42,
+          height: isCompact ? 38 : 42,
           decoration: BoxDecoration(
             color: tone.withValues(alpha: 0.16),
             shape: BoxShape.circle,
@@ -135,10 +141,10 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
           child: Icon(
             _status?.goalMet == true ? Icons.verified : Icons.code,
             color: tone,
-            size: 22,
+            size: isCompact ? 20 : 22,
           ),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: isCompact ? 10 : 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -146,10 +152,10 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
               Text(
                 'LEETCODE STATUS',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: isCompact ? 10 : 11,
                   fontWeight: FontWeight.bold,
                   color: AppColors.cream.withValues(alpha: 0.64),
-                  letterSpacing: 1.8,
+                  letterSpacing: isCompact ? 1.2 : 1.8,
                 ),
               ),
               const SizedBox(height: 4),
@@ -169,7 +175,7 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: tone,
-                    fontSize: 11,
+                    fontSize: isCompact ? 10 : 11,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.8,
                   ),
@@ -182,6 +188,7 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
           onPressed: _isRefreshing
               ? null
               : () => _loadStatus(showLoader: false),
+          visualDensity: VisualDensity.compact,
           icon: _isRefreshing
               ? const SizedBox(
                   width: 18,
@@ -200,7 +207,7 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(bool isCompact) {
     if (_isLoading) {
       return const Center(
         key: ValueKey('leetcode-loading'),
@@ -239,7 +246,7 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
             ),
             const Spacer(),
             TextButton.icon(
-              onPressed: _loadStatus,
+              onPressed: () => _loadStatus(),
               style: TextButton.styleFrom(
                 foregroundColor: AppColors.cream,
                 padding: EdgeInsets.zero,
@@ -261,29 +268,48 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
       key: const ValueKey('leetcode-ready'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _MetricTile(
-                label: 'Problems',
-                value:
-                    '${status.progress.uniqueProblems}/${status.goals.uniqueProblems}',
-                detail: '${status.progress.problemsLeft} left',
-                accent: AppColors.orange,
+        if (isCompact) ...[
+          _MetricTile(
+            compact: true,
+            label: 'Problems',
+            value:
+                '${status.progress.uniqueProblems}/${status.goals.uniqueProblems}',
+            detail: '${status.progress.problemsLeft} left',
+            accent: AppColors.orange,
+          ),
+          const SizedBox(height: 10),
+          _MetricTile(
+            compact: true,
+            label: 'Submissions',
+            value:
+                '${status.progress.totalSubmissions}/${status.goals.totalSubmissions}',
+            detail: '${status.progress.submissionsLeft} left',
+            accent: AppColors.teal,
+          ),
+        ] else
+          Row(
+            children: [
+              Expanded(
+                child: _MetricTile(
+                  label: 'Problems',
+                  value:
+                      '${status.progress.uniqueProblems}/${status.goals.uniqueProblems}',
+                  detail: '${status.progress.problemsLeft} left',
+                  accent: AppColors.orange,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _MetricTile(
-                label: 'Submissions',
-                value:
-                    '${status.progress.totalSubmissions}/${status.goals.totalSubmissions}',
-                detail: '${status.progress.submissionsLeft} left',
-                accent: AppColors.teal,
+              const SizedBox(width: 10),
+              Expanded(
+                child: _MetricTile(
+                  label: 'Submissions',
+                  value:
+                      '${status.progress.totalSubmissions}/${status.goals.totalSubmissions}',
+                  detail: '${status.progress.submissionsLeft} left',
+                  accent: AppColors.teal,
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         const SizedBox(height: 12),
         _ProgressLine(
           label: 'Accepted problems',
@@ -320,23 +346,34 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
         ),
         const Spacer(),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Text(
                 'Deadline ${_dateFormat.format(status.deadline.toLocal())}',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.62),
-                  fontSize: 12,
+                  fontSize: isCompact ? 11 : 12,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ),
-            TextButton.icon(
-              onPressed: _openDetails,
-              style: TextButton.styleFrom(foregroundColor: AppColors.cream),
-              icon: const Icon(Icons.open_in_full, size: 18),
-              label: const Text('Details'),
-            ),
+            if (isCompact)
+              IconButton(
+                onPressed: _openDetails,
+                icon: const Icon(
+                  Icons.open_in_full,
+                  size: 18,
+                  color: AppColors.cream,
+                ),
+              )
+            else
+              TextButton.icon(
+                onPressed: _openDetails,
+                style: TextButton.styleFrom(foregroundColor: AppColors.cream),
+                icon: const Icon(Icons.open_in_full, size: 18),
+                label: const Text('Details'),
+              ),
           ],
         ),
       ],
@@ -369,12 +406,14 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
 }
 
 class _MetricTile extends StatelessWidget {
+  final bool compact;
   final String label;
   final String value;
   final String detail;
   final Color accent;
 
   const _MetricTile({
+    this.compact = false,
     required this.label,
     required this.value,
     required this.detail,
@@ -405,9 +444,9 @@ class _MetricTile extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 22,
+              fontSize: compact ? 18 : 22,
               fontWeight: FontWeight.bold,
               height: 1.1,
             ),

@@ -26,9 +26,9 @@ class BentoGridItem {
     this.maxHeight = 300,
     this.resizable = true,
     required this.card,
-  })  : assert(minSpan >= 1),
-        assert(maxSpan <= 2),
-        assert(minSpan <= maxSpan);
+  }) : assert(minSpan >= 1),
+       assert(maxSpan <= 2),
+       assert(minSpan <= maxSpan);
 }
 
 /// Serializable layout state for persistence.
@@ -44,10 +44,10 @@ class BentoGridLayoutItem {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'span': columnSpan,
-        'height': height,
-      };
+    'id': id,
+    'span': columnSpan,
+    'height': height,
+  };
 
   factory BentoGridLayoutItem.fromJson(Map<String, dynamic> json) {
     return BentoGridLayoutItem(
@@ -72,15 +72,15 @@ class _Item {
   final Widget card;
 
   _Item.from(BentoGridItem i)
-      : id = i.id,
-        height = i.height,
-        columnSpan = i.columnSpan.clamp(i.minSpan, i.maxSpan).toInt(),
-        minSpan = i.minSpan,
-        maxSpan = i.maxSpan,
-        minHeight = i.minHeight,
-        maxHeight = i.maxHeight,
-        resizable = i.resizable,
-        card = i.card;
+    : id = i.id,
+      height = i.height,
+      columnSpan = i.columnSpan.clamp(i.minSpan, i.maxSpan).toInt(),
+      minSpan = i.minSpan,
+      maxSpan = i.maxSpan,
+      minHeight = i.minHeight,
+      maxHeight = i.maxHeight,
+      resizable = i.resizable,
+      card = i.card;
 }
 
 class _Rect {
@@ -237,11 +237,13 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
   void _emitLayout() {
     if (widget.onLayoutChanged == null) return;
     final layout = _items
-        .map((e) => BentoGridLayoutItem(
-              id: e.id,
-              columnSpan: e.columnSpan,
-              height: e.height,
-            ))
+        .map(
+          (e) => BentoGridLayoutItem(
+            id: e.id,
+            columnSpan: e.columnSpan,
+            height: e.height,
+          ),
+        )
         .toList(growable: false);
     widget.onLayoutChanged!(layout);
   }
@@ -279,10 +281,10 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
   void _startDrag(int i, Offset globalPosition) {
     // If we are already dragging something else, ignore new touches
     if (!_editMode || _dragIdx != null || _resizeIdx != null) return;
-    
+
     // Strong vibration to indicate selection ("Zig")
-    HapticFeedback.mediumImpact(); 
-    
+    HapticFeedback.mediumImpact();
+
     _setInteractionActive(true);
     setState(() {
       _dragIdx = i;
@@ -410,6 +412,7 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
       h == _ResizeHandle.bottomRight;
 
   void _resStart(int i, _ResizeHandle handle, DragStartDetails d) {
+    HapticFeedback.mediumImpact();
     _setInteractionActive(true);
     setState(() {
       _resizeIdx = i;
@@ -500,8 +503,9 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
     setState(() {
       final item = _items[i];
       if (item.minSpan == item.maxSpan) return;
-      item.columnSpan =
-          item.columnSpan == item.maxSpan ? item.minSpan : item.maxSpan;
+      item.columnSpan = item.columnSpan == item.maxSpan
+          ? item.minSpan
+          : item.maxSpan;
     });
     _emitLayout();
   }
@@ -510,41 +514,45 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (ctx, box) {
-      _gridW = box.maxWidth - widget.padding.horizontal;
-      _gap = _editMode ? widget.spacing + 20 : widget.spacing;
-      _layout = _computeLayout(_items, _gridW, _gap);
+    return LayoutBuilder(
+      builder: (ctx, box) {
+        _gridW = box.maxWidth - widget.padding.horizontal;
+        _gap = _editMode ? widget.spacing + 20 : widget.spacing;
+        _layout = _computeLayout(_items, _gridW, _gap);
 
-      return GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: _editMode ? _exitEdit : null,
-        child: Padding(
-          padding: widget.padding,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedSize(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOut,
-                child: _editMode ? _buildEditHeader() : const SizedBox.shrink(),
-              ),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                height: _layout!.totalHeight,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    for (int i = 0; i < _items.length; i++)
-                      if (i != _dragIdx) _positioned(i),
-                    if (_dragIdx != null) _positioned(_dragIdx!),
-                  ],
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: _editMode ? _exitEdit : null,
+          child: Padding(
+            padding: widget.padding,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOut,
+                  child: _editMode
+                      ? _buildEditHeader()
+                      : const SizedBox.shrink(),
                 ),
-              ),
-            ],
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  height: _layout!.totalHeight,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      for (int i = 0; i < _items.length; i++)
+                        if (i != _dragIdx) _positioned(i),
+                      if (_dragIdx != null) _positioned(_dragIdx!),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 
   Widget _buildEditHeader() {
@@ -568,13 +576,16 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
                 GestureDetector(
                   onTap: widget.onResetRequested,
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 7,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.12)),
+                        color: Colors.white.withValues(alpha: 0.12),
+                      ),
                     ),
                     child: Text(
                       'Reset',
@@ -586,18 +597,20 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-              if (widget.onResetRequested != null)
-                const SizedBox(width: 8),
+              if (widget.onResetRequested != null) const SizedBox(width: 8),
               GestureDetector(
                 onTap: _exitEdit,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.15)),
+                      color: Colors.white.withValues(alpha: 0.15),
+                    ),
                   ),
                   child: const Text(
                     'Done',
@@ -675,20 +688,33 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
     // 3. Non-selected boxes: shrink, gray out, and fade
     //    When dragging one box, all others become small & grayed
     final bool isInactive = _dragIdx != null && !dragging;
-    
+
     // Grayscale matrix for desaturation effect
     const grayscaleMatrix = ColorFilter.matrix(<double>[
-      0.2126, 0.7152, 0.0722, 0, 0,
-      0.2126, 0.7152, 0.0722, 0, 0,
-      0.2126, 0.7152, 0.0722, 0, 0,
-      0,      0,      0,      1, 0,
+      0.2126,
+      0.7152,
+      0.0722,
+      0,
+      0,
+      0.2126,
+      0.7152,
+      0.0722,
+      0,
+      0,
+      0.2126,
+      0.7152,
+      0.0722,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
     ]);
 
     if (isInactive) {
-      c = ColorFiltered(
-        colorFilter: grayscaleMatrix,
-        child: c,
-      );
+      c = ColorFiltered(colorFilter: grayscaleMatrix, child: c);
     }
 
     // 4. Scale & Shadow - dragged box pops up, inactive boxes shrink down
@@ -698,8 +724,8 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
       transform: dragging
           ? Matrix4.diagonal3Values(1.05, 1.05, 1.0)
           : isInactive
-              ? Matrix4.diagonal3Values(0.92, 0.92, 1.0)
-              : Matrix4.identity(),
+          ? Matrix4.diagonal3Values(0.92, 0.92, 1.0)
+          : Matrix4.identity(),
       transformAlignment: Alignment.center,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
@@ -728,8 +754,7 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
     if (_editMode) {
       c = GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onDoubleTap:
-            item.minSpan == item.maxSpan ? null : () => _toggleSpan(i),
+        onDoubleTap: item.minSpan == item.maxSpan ? null : () => _toggleSpan(i),
         // Use onPanDown for immediate feedback, then onPanStart for actual drag
         onPanDown: (_) {}, // Immediately claim the gesture
         onPanStart: (d) => _dragStart(i, d),
@@ -812,6 +837,7 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
       alignment: alignment,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
+        onPanDown: (_) => HapticFeedback.selectionClick(),
         onPanStart: (d) => _resStart(i, handle, d),
         onPanUpdate: _resUpdate,
         onPanEnd: _resEnd,
@@ -838,6 +864,7 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
       alignment: alignment,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
+        onPanDown: (_) => HapticFeedback.selectionClick(),
         onPanStart: (d) => _resStart(i, handle, d),
         onPanUpdate: _resUpdate,
         onPanEnd: _resEnd,
@@ -851,9 +878,7 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.45),
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.5),
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.5)),
               ),
             ),
           ),
