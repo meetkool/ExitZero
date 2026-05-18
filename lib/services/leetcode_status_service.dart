@@ -14,18 +14,11 @@ class LeetCodeStatusException implements Exception {
 }
 
 class LeetCodeStatusService {
-  static final Uri _statusUri = Uri.parse(
-    'http://leetcode.mockpeer.me/status',
-  );
+  static final Uri _statusUri = Uri.parse('http://leetcode.mockpeer.me/status');
 
   Future<LeetCodeStatus> fetchStatus() async {
     final response = await http
-        .get(
-          _statusUri,
-          headers: const {
-            'Accept': 'application/json',
-          },
-        )
+        .get(_statusUri, headers: const {'Accept': 'application/json'})
         .timeout(const Duration(seconds: 15));
 
     if (response.statusCode != 200) {

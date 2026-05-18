@@ -96,14 +96,9 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
       gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [
-          Color(0xFF09131B),
-          Color(0xFF08283A),
-        ],
+        colors: [Color(0xFF09131B), Color(0xFF08283A)],
       ),
-      border: Border.all(
-        color: AppColors.teal.withValues(alpha: 0.22),
-      ),
+      border: Border.all(color: AppColors.teal.withValues(alpha: 0.22)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -125,8 +120,8 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
     final label = _status == null
         ? 'SYNCING'
         : _status!.goalMet
-            ? 'GOAL MET'
-            : _status!.status.replaceAll('_', ' ').toUpperCase();
+        ? 'GOAL MET'
+        : _status!.status.replaceAll('_', ' ').toUpperCase();
 
     return Row(
       children: [
@@ -166,9 +161,7 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
                 decoration: BoxDecoration(
                   color: tone.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: tone.withValues(alpha: 0.35),
-                  ),
+                  border: Border.all(color: tone.withValues(alpha: 0.35)),
                 ),
                 child: Text(
                   label,
@@ -186,7 +179,9 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
           ),
         ),
         IconButton(
-          onPressed: _isRefreshing ? null : () => _loadStatus(showLoader: false),
+          onPressed: _isRefreshing
+              ? null
+              : () => _loadStatus(showLoader: false),
           icon: _isRefreshing
               ? const SizedBox(
                   width: 18,
@@ -209,9 +204,7 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
     if (_isLoading) {
       return const Center(
         key: ValueKey('leetcode-loading'),
-        child: CircularProgressIndicator(
-          color: AppColors.orange,
-        ),
+        child: CircularProgressIndicator(color: AppColors.orange),
       );
     }
 
@@ -222,9 +215,7 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: AppColors.burnt.withValues(alpha: 0.28),
-          ),
+          border: Border.all(color: AppColors.burnt.withValues(alpha: 0.28)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -315,10 +306,7 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            _InfoChip(
-              icon: Icons.schedule,
-              label: _formatRemaining(status),
-            ),
+            _InfoChip(icon: Icons.schedule, label: _formatRemaining(status)),
             _InfoChip(
               icon: Icons.flag,
               label: 'Phase: ${status.enforcer.phase}',
@@ -345,9 +333,7 @@ class _LeetCodeCardState extends State<LeetCodeCard> {
             ),
             TextButton.icon(
               onPressed: _openDetails,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.cream,
-              ),
+              style: TextButton.styleFrom(foregroundColor: AppColors.cream),
               icon: const Icon(Icons.open_in_full, size: 18),
               label: const Text('Details'),
             ),
@@ -402,9 +388,7 @@ class _MetricTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: accent.withValues(alpha: 0.22),
-        ),
+        border: Border.all(color: accent.withValues(alpha: 0.22)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -515,33 +499,21 @@ class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
 
-  const _InfoChip({
-    required this.icon,
-    required this.label,
-  });
+  const _InfoChip({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 14,
-            color: AppColors.cream.withValues(alpha: 0.72),
-          ),
+          Icon(icon, size: 14, color: AppColors.cream.withValues(alpha: 0.72)),
           const SizedBox(width: 6),
           Text(
             label,
@@ -573,8 +545,8 @@ class _LeetCodeDetailsSheet extends StatelessWidget {
     final tone = status.goalMet
         ? const Color(0xFF35D59A)
         : status.enforcer.pastDeadline
-            ? AppColors.burnt
-            : AppColors.orange;
+        ? AppColors.burnt
+        : AppColors.orange;
 
     return SafeArea(
       top: false,
@@ -583,12 +555,8 @@ class _LeetCodeDetailsSheet extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             color: AppColors.deep,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(30),
-            ),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           ),
           child: Column(
             children: [
@@ -638,9 +606,7 @@ class _LeetCodeDetailsSheet extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: tone.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: tone.withValues(alpha: 0.35),
-                        ),
+                        border: Border.all(color: tone.withValues(alpha: 0.35)),
                       ),
                       child: Text(
                         status.goalMet ? 'GOAL MET' : 'ACTIVE',
@@ -654,10 +620,7 @@ class _LeetCodeDetailsSheet extends StatelessWidget {
                     ),
                     IconButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(
-                        Icons.close,
-                        color: Colors.white,
-                      ),
+                      icon: const Icon(Icons.close, color: Colors.white),
                     ),
                   ],
                 ),
@@ -676,12 +639,15 @@ class _LeetCodeDetailsSheet extends StatelessWidget {
                           ),
                           _SheetRow(
                             label: 'Fetched at',
-                            value: dateFormat.format(status.fetchedAt.toLocal()),
+                            value: dateFormat.format(
+                              status.fetchedAt.toLocal(),
+                            ),
                           ),
                           _SheetRow(
                             label: 'Server time',
-                            value:
-                                dateFormat.format(status.serverTime.toLocal()),
+                            value: dateFormat.format(
+                              status.serverTime.toLocal(),
+                            ),
                           ),
                           _SheetRow(
                             label: 'Deadline',
@@ -702,13 +668,11 @@ class _LeetCodeDetailsSheet extends StatelessWidget {
                           ),
                           _SheetRow(
                             label: 'Total submissions',
-                            value:
-                                status.progress.totalSubmissions.toString(),
+                            value: status.progress.totalSubmissions.toString(),
                           ),
                           _SheetRow(
                             label: 'Accepted problems',
-                            value:
-                                status.progress.acceptedProblems.toString(),
+                            value: status.progress.acceptedProblems.toString(),
                           ),
                           _SheetRow(
                             label: 'Problems left',
@@ -762,8 +726,7 @@ class _LeetCodeDetailsSheet extends StatelessWidget {
                           ),
                           _SheetRow(
                             label: 'Past deadline',
-                            value:
-                                status.enforcer.pastDeadline ? 'Yes' : 'No',
+                            value: status.enforcer.pastDeadline ? 'Yes' : 'No',
                           ),
                           _SheetRow(
                             label: 'Reminders sent today',
@@ -794,9 +757,7 @@ class _LeetCodeDetailsSheet extends StatelessWidget {
                     const SizedBox(height: 12),
                     _SheetSection(
                       title: 'Problems',
-                      child: _ProblemsBlock(
-                        problems: status.problems,
-                      ),
+                      child: _ProblemsBlock(problems: status.problems),
                     ),
                   ],
                 ),
@@ -813,10 +774,7 @@ class _SheetSection extends StatelessWidget {
   final String title;
   final Widget child;
 
-  const _SheetSection({
-    required this.title,
-    required this.child,
-  });
+  const _SheetSection({required this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -825,9 +783,7 @@ class _SheetSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.06),
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -868,9 +824,7 @@ class _SheetRow extends StatelessWidget {
         border: isLast
             ? null
             : Border(
-                bottom: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.06),
-                ),
+                bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
               ),
       ),
       child: Row(
@@ -908,10 +862,7 @@ class _MapBlock extends StatelessWidget {
   final Map<String, dynamic>? data;
   final String emptyLabel;
 
-  const _MapBlock({
-    required this.data,
-    required this.emptyLabel,
-  });
+  const _MapBlock({required this.data, required this.emptyLabel});
 
   @override
   Widget build(BuildContext context) {
@@ -946,9 +897,7 @@ class _MapBlock extends StatelessWidget {
 class _ProblemsBlock extends StatelessWidget {
   final List<Map<String, dynamic>> problems;
 
-  const _ProblemsBlock({
-    required this.problems,
-  });
+  const _ProblemsBlock({required this.problems});
 
   @override
   Widget build(BuildContext context) {
@@ -971,9 +920,7 @@ class _ProblemsBlock extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.04),
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.06),
-              ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

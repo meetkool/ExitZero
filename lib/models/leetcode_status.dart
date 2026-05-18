@@ -30,15 +30,9 @@ class LeetCodeStatus {
       fetchedAt: _readDateTime(json['fetchedAt']),
       serverTime: _readDateTime(json['serverTime']),
       deadline: _readDateTime(json['deadline']),
-      progress: LeetCodeProgress.fromJson(
-        _readMap(json['progress']),
-      ),
-      goals: LeetCodeGoals.fromJson(
-        _readMap(json['goals']),
-      ),
-      enforcer: LeetCodeEnforcer.fromJson(
-        _readMap(json['enforcer']),
-      ),
+      progress: LeetCodeProgress.fromJson(_readMap(json['progress'])),
+      goals: LeetCodeGoals.fromJson(_readMap(json['goals'])),
+      enforcer: LeetCodeEnforcer.fromJson(_readMap(json['enforcer'])),
       problems: _readListOfMaps(json['problems']),
       profile: json['profile'] is Map<String, dynamic>
           ? json['profile'] as Map<String, dynamic>
@@ -142,9 +136,7 @@ Map<String, dynamic> _readMap(dynamic value) {
     return value;
   }
   if (value is Map) {
-    return value.map(
-      (key, item) => MapEntry(key.toString(), item),
-    );
+    return value.map((key, item) => MapEntry(key.toString(), item));
   }
   return const <String, dynamic>{};
 }
@@ -156,11 +148,7 @@ List<Map<String, dynamic>> _readListOfMaps(dynamic value) {
 
   return value
       .whereType<Map>()
-      .map(
-        (item) => item.map(
-          (key, entry) => MapEntry(key.toString(), entry),
-        ),
-      )
+      .map((item) => item.map((key, entry) => MapEntry(key.toString(), entry)))
       .toList(growable: false);
 }
 

@@ -28,6 +28,7 @@ import 'dashboard/cards/notification_card.dart';
 import 'dashboard/cards/alarm_card.dart';
 import 'package:alarm/alarm.dart';
 import '../pages/alarm_page.dart';
+
 /// Main dashboard screen — bento-grid layout with FAB.
 ///
 /// Converts to "edit layout" mode when the user long-presses any card.
@@ -41,8 +42,6 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   static const _layoutStorageKey = 'bento_grid_layout_v1';
-
-
 
   /// True only while dragging/resizing (scroll temporarily disabled).
   bool _gridInteracting = false;
@@ -68,7 +67,7 @@ class _DashboardPageState extends State<DashboardPage> {
     NotificationManager().initialize();
     _loadLayout();
     _fetchTodaysInterviews();
-    
+
     // Subscribe to global updates
     _interviewSubscription = InterviewService.onInterviewsUpdated.listen((_) {
       if (mounted) {
@@ -76,13 +75,14 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     });
 
-    _notificationSubscription = NotificationManager().notificationsStream.listen((_) {
-      if (mounted) {
-        setState(() {
-          _layoutVersion++;
+    _notificationSubscription = NotificationManager().notificationsStream
+        .listen((_) {
+          if (mounted) {
+            setState(() {
+              _layoutVersion++;
+            });
+          }
         });
-      }
-    });
   }
 
   @override
@@ -96,8 +96,10 @@ class _DashboardPageState extends State<DashboardPage> {
     try {
       // Fetch all scheduled interviews instead of restricting to "today"
       // This ensures we show relevant upcoming data even if dates/timezones vary.
-      final interviews = await _interviewService.getInterviews(status: 'scheduled');
-      
+      final interviews = await _interviewService.getInterviews(
+        status: 'scheduled',
+      );
+
       // Sort by date (soonest first)
       interviews.sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
@@ -118,10 +120,8 @@ class _DashboardPageState extends State<DashboardPage> {
   void _handleNotificationTap() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const NotificationsPage(),
-      ),
-    ); 
+      MaterialPageRoute(builder: (context) => const NotificationsPage()),
+    );
   }
 
   Future<void> _loadLayout() async {
@@ -133,9 +133,11 @@ class _DashboardPageState extends State<DashboardPage> {
       if (decoded is! List) return;
       final loaded = decoded
           .whereType<Map>()
-          .map((e) => BentoGridLayoutItem.fromJson(
-                e.map((k, v) => MapEntry(k.toString(), v)),
-              ))
+          .map(
+            (e) => BentoGridLayoutItem.fromJson(
+              e.map((k, v) => MapEntry(k.toString(), v)),
+            ),
+          )
           .toList();
       if (!mounted) return;
       setState(() {
@@ -207,18 +209,21 @@ class _DashboardPageState extends State<DashboardPage> {
             // First check if an alarm is actively ringing
             final alarms = await Alarm.getAlarms();
             if (alarms.isNotEmpty) {
-               Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => AlarmPage(alarmId: alarms.first.id)),
-               );
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AlarmPage(alarmId: alarms.first.id),
+                ),
+              );
             } else {
-               // If none ringing, show normal notifications page filtered to alarms
-               Navigator.push(
-                 context,
-                 MaterialPageRoute(
-                   builder: (context) => const NotificationsPage(filterTag: 'alarm'),
-                 ),
-               );
+              // If none ringing, show normal notifications page filtered to alarms
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      const NotificationsPage(filterTag: 'alarm'),
+                ),
+              );
             }
           },
         ),
@@ -235,7 +240,7 @@ class _DashboardPageState extends State<DashboardPage> {
         maxHeight: 420,
         card: LeetCodeCard(),
       ),
-      
+
       // Video Tile (right)
       const BentoGridItem(
         id: 'video-tile',
@@ -250,7 +255,7 @@ class _DashboardPageState extends State<DashboardPage> {
           showInfo: false,
         ),
       ),
-      
+
       // Accountability Engine
       const BentoGridItem(
         id: 'accountability',
@@ -278,10 +283,7 @@ class _DashboardPageState extends State<DashboardPage> {
         height: 120, // Updated height
         minHeight: 100,
         maxHeight: 220,
-        card: LifeScoreCard(
-          score: 450,
-          nextRewardAt: 500,
-        ),
+        card: LifeScoreCard(score: 450, nextRewardAt: 500),
       ),
 
       // Interviews (Carousel)
@@ -311,10 +313,7 @@ class _DashboardPageState extends State<DashboardPage> {
               time: '10:00 AM',
               isActive: true,
             ),
-            LogEntry(
-              message: 'Waiting for submissions...',
-              time: 'Now',
-            ),
+            LogEntry(message: 'Waiting for submissions...', time: 'Now'),
           ],
         ),
       ),
@@ -347,10 +346,7 @@ class _DashboardPageState extends State<DashboardPage> {
     return items;
   }
 
-  BentoGridItem _applyLayout(
-    BentoGridItem base,
-    BentoGridLayoutItem saved,
-  ) {
+  BentoGridItem _applyLayout(BentoGridItem base, BentoGridLayoutItem saved) {
     final span = saved.columnSpan.clamp(base.minSpan, base.maxSpan).toInt();
     final height = saved.height.clamp(base.minHeight, base.maxHeight);
     return BentoGridItem(
@@ -377,77 +373,79 @@ class _DashboardPageState extends State<DashboardPage> {
           decoration: BoxDecoration(
             color: const Color(0xFF001e2e).withValues(alpha: 0.95),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-            border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+            border: Border(
+              top: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+            ),
           ),
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-               // Handle
-               Container(
-                 width: 40,
-                 height: 4,
-                 decoration: BoxDecoration(
-                   color: Colors.white.withValues(alpha: 0.1),
-                   borderRadius: BorderRadius.circular(2),
-                 ),
-                 margin: const EdgeInsets.only(bottom: 24),
-               ),
-               
-               // Title
-               Text(
-                 'LOG ACTIVITY',
-                 style: TextStyle(
-                   color: AppColors.cream.withValues(alpha: 0.6),
-                   fontSize: 14,
-                   fontWeight: FontWeight.bold,
-                   letterSpacing: 1.0,
-                 ),
-               ),
-               const SizedBox(height: 32),
+              // Handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                margin: const EdgeInsets.only(bottom: 24),
+              ),
 
-               // Grid Buttons
-               Row(
-                 children: [
-                   Expanded(
-                     child: _buildModalButton(
-                       icon: Icons.send,
-                       color: AppColors.orange,
-                       label: 'Log Outreach',
-                       onTap: () {},
-                     ),
-                   ),
-                   const SizedBox(width: 16),
-                   Expanded(
-                     child: _buildModalButton(
-                       icon: Icons.calendar_month,
-                       color: AppColors.teal,
-                       label: 'Schedule Mock',
-                       onTap: () async {
-                         Navigator.pop(context);
-                         await Navigator.pushNamed(context, '/schedule-mock');
-                         if (context.mounted) {
-                            _fetchTodaysInterviews();
-                         }
-                       },
-                     ),
-                   ),
-                 ],
-               ),
-               const SizedBox(height: 32),
+              // Title
+              Text(
+                'LOG ACTIVITY',
+                style: TextStyle(
+                  color: AppColors.cream.withValues(alpha: 0.6),
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              const SizedBox(height: 32),
 
-               // Close button
-               TextButton(
-                 onPressed: () => Navigator.pop(context),
-                 child: Text(
-                   'Close',
-                   style: TextStyle(
-                     color: AppColors.cream.withValues(alpha: 0.6),
-                     fontSize: 16,
-                     fontWeight: FontWeight.w500,
-                   ),
-                 ),
-               ),
+              // Grid Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildModalButton(
+                      icon: Icons.send,
+                      color: AppColors.orange,
+                      label: 'Log Outreach',
+                      onTap: () {},
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildModalButton(
+                      icon: Icons.calendar_month,
+                      color: AppColors.teal,
+                      label: 'Schedule Mock',
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await Navigator.pushNamed(context, '/schedule-mock');
+                        if (context.mounted) {
+                          _fetchTodaysInterviews();
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+
+              // Close button
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Close',
+                  style: TextStyle(
+                    color: AppColors.cream.withValues(alpha: 0.6),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
             ],
           ),
         );
@@ -514,11 +512,13 @@ class _DashboardPageState extends State<DashboardPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                   // ── Header ──
+                  // ── Header ──
                   Container(
                     height: 64,
                     padding: const EdgeInsets.symmetric(horizontal: 24),
-                    color: Colors.black.withValues(alpha: 0.8), // Using withValues for alpha
+                    color: Colors.black.withValues(
+                      alpha: 0.8,
+                    ), // Using withValues for alpha
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -530,7 +530,9 @@ class _DashboardPageState extends State<DashboardPage> {
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.05),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.1),
+                                ),
                               ),
                               child: Icon(
                                 Icons.dashboard,
@@ -611,7 +613,9 @@ class _DashboardPageState extends State<DashboardPage> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFF77F00).withValues(alpha: 0.3), // glow-orange
+                        color: const Color(
+                          0xFFF77F00,
+                        ).withValues(alpha: 0.3), // glow-orange
                         blurRadius: 20,
                         spreadRadius: 0,
                       ),
@@ -626,6 +630,7 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
   }
+
   void _showTodaysInterviewsModal(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -637,105 +642,152 @@ class _DashboardPageState extends State<DashboardPage> {
           decoration: BoxDecoration(
             color: const Color(0xFF001e2e).withValues(alpha: 0.95),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-            border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+            border: Border(
+              top: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+            ),
           ),
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
           child: Column(
             children: [
-               // Handle
-               Container(
-                 width: 40,
-                 height: 4,
-                 decoration: BoxDecoration(
-                   color: Colors.white.withValues(alpha: 0.1),
-                   borderRadius: BorderRadius.circular(2),
-                 ),
-                 margin: const EdgeInsets.only(bottom: 24),
-               ),
-               
-               // Title
-               Text(
-                 'UPCOMING INTERVIEWS',
-                 style: TextStyle(
-                   color: AppColors.teal,
-                   fontSize: 14,
-                   fontWeight: FontWeight.bold,
-                   letterSpacing: 1.0,
-                 ),
-               ),
-               const SizedBox(height: 20),
+              // Handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                margin: const EdgeInsets.only(bottom: 24),
+              ),
 
-               // List
-               Expanded(
-                 child: _todaysInterviews.isEmpty 
-                    ? const Center(child: Text("No interviews today", style: TextStyle(color: Colors.white54)))
+              // Title
+              Text(
+                'UPCOMING INTERVIEWS',
+                style: TextStyle(
+                  color: AppColors.teal,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // List
+              Expanded(
+                child: _todaysInterviews.isEmpty
+                    ? const Center(
+                        child: Text(
+                          "No interviews today",
+                          style: TextStyle(color: Colors.white54),
+                        ),
+                      )
                     : ListView.separated(
                         itemCount: _todaysInterviews.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 12),
                         itemBuilder: (context, index) {
-                           final interview = _todaysInterviews[index];
-                           final timeStr = DateFormat('h:mm a').format(interview.dateTime);
-                           return ListTile(
-                             onTap: () {
-                               Navigator.pop(context); // Close modal
-                               Navigator.push(
-                                 context,
-                                 MaterialPageRoute(
-                                   builder: (context) => MockInterviewDetailPage(
-                                     interview: interview,
-                                     onEdit: (updated) {
-                                       // Stream will update dashboard
-                                     }, 
-                                     onDelete: () async {
-                                        await _interviewService.deleteInterview(interview.id);
-                                     },
-                                     onToggleComplete: () async {
-                                        final newStatus = interview.status == 'completed' ? 'scheduled' : 'completed';
-                                        await _interviewService.updateInterviewStatus(interview.id, newStatus);
-                                     },
-                                   ),
-                                 ),
-                               );
-                             },
-                             tileColor: Colors.white.withValues(alpha: 0.05),
-                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                             leading: CircleAvatar(
-                               backgroundColor: AppColors.teal.withValues(alpha: 0.2),
-                               child: Text(
-                                 interview.company.isNotEmpty ? interview.company[0] : '?',
-                                 style: TextStyle(color: AppColors.teal, fontWeight: FontWeight.bold),
-                               ),
-                             ),
-                             title: Text(interview.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                             subtitle: Text('${interview.role} • $timeStr', style: const TextStyle(color: Colors.white54)),
-                             trailing: Icon(Icons.chevron_right, color: Colors.white24),
-                           );
+                          final interview = _todaysInterviews[index];
+                          final timeStr = DateFormat(
+                            'h:mm a',
+                          ).format(interview.dateTime);
+                          return ListTile(
+                            onTap: () {
+                              Navigator.pop(context); // Close modal
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => MockInterviewDetailPage(
+                                    interview: interview,
+                                    onEdit: (updated) {
+                                      // Stream will update dashboard
+                                    },
+                                    onDelete: () async {
+                                      await _interviewService.deleteInterview(
+                                        interview.id,
+                                      );
+                                    },
+                                    onToggleComplete: () async {
+                                      final newStatus =
+                                          interview.status == 'completed'
+                                          ? 'scheduled'
+                                          : 'completed';
+                                      await _interviewService
+                                          .updateInterviewStatus(
+                                            interview.id,
+                                            newStatus,
+                                          );
+                                    },
+                                  ),
+                                ),
+                              );
+                            },
+                            tileColor: Colors.white.withValues(alpha: 0.05),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            leading: CircleAvatar(
+                              backgroundColor: AppColors.teal.withValues(
+                                alpha: 0.2,
+                              ),
+                              child: Text(
+                                interview.company.isNotEmpty
+                                    ? interview.company[0]
+                                    : '?',
+                                style: TextStyle(
+                                  color: AppColors.teal,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            title: Text(
+                              interview.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${interview.role} • $timeStr',
+                              style: const TextStyle(color: Colors.white54),
+                            ),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              color: Colors.white24,
+                            ),
+                          );
                         },
                       ),
-               ),
+              ),
 
-               // "See All" Button
-               Padding(
-                 padding: const EdgeInsets.symmetric(vertical: 24),
-                 child: SizedBox(
-                   width: double.infinity,
-                   height: 50,
-                   child: ElevatedButton(
-                     onPressed: () async {
-                       Navigator.pop(context);
-                       await Navigator.pushNamed(context, '/schedule-mock'); // Navigate to full schedule
-                       if (context.mounted) {
-                          _fetchTodaysInterviews();
-                       }
-                     },
-                     style: ElevatedButton.styleFrom(
-                       backgroundColor: AppColors.teal,
-                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                     ),
-                     child: const Text('View Full Schedule', style: TextStyle(color: Colors.white, fontSize: 16)),
-                   ),
-                 ),
-               ),
+              // "See All" Button
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await Navigator.pushNamed(
+                        context,
+                        '/schedule-mock',
+                      ); // Navigate to full schedule
+                      if (context.mounted) {
+                        _fetchTodaysInterviews();
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.teal,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'View Full Schedule',
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         );
