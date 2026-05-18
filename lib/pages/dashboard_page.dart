@@ -224,18 +224,16 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       ),
 
-      // LeetCode (left)
-      BentoGridItem(
+      // LeetCode status
+      const BentoGridItem(
         id: 'leetcode',
-        columnSpan: 1,
-        height: 150,
-        minHeight: 100,
-        maxHeight: 220,
-        card: LeetCodeCard(
-          submissions: 0,
-          target: 1,
-          onRefresh: () {},
-        ),
+        columnSpan: 2,
+        minSpan: 2,
+        maxSpan: 2,
+        height: 290,
+        minHeight: 240,
+        maxHeight: 420,
+        card: LeetCodeCard(),
       ),
       
       // Video Tile (right)
