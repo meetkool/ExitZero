@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../services/auth_service.dart';
-import '../services/token_storage.dart';
 
 /// Splash screen: shows the ExitZero logo and a loader,
-/// then checks for a saved token to auto‐login or goes to welcome.
+/// then continues to the dashboard.
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
 
@@ -27,32 +25,15 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
     _fadeAnimation = CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
     _fadeController.forward();
 
-    _checkAuth();
+    _continueToDashboard();
   }
 
-  Future<void> _checkAuth() async {
+  Future<void> _continueToDashboard() async {
     // Give the splash animation at least 2 seconds to play.
     await Future.delayed(const Duration(milliseconds: 2000));
 
     if (!mounted) return;
-
-    try {
-      final token = await TokenStorage.getToken();
-      if (token != null && token.isNotEmpty) {
-        // Validate the token by hitting /users/me
-        final user = await AuthService.getMe(token);
-        await TokenStorage.saveUserData(user);
-        if (!mounted) return;
-        Navigator.of(context).pushReplacementNamed('/dashboard');
-        return;
-      }
-    } catch (_) {
-      // Token invalid or network error — clear and go to welcome.
-      await TokenStorage.clearAll();
-    }
-
-    if (!mounted) return;
-    Navigator.of(context).pushReplacementNamed('/welcome');
+    Navigator.of(context).pushReplacementNamed('/dashboard');
   }
 
   @override

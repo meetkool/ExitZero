@@ -1,9 +1,9 @@
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
-import '../services/auth_service.dart';
-import '../services/token_storage.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -13,49 +13,17 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  Map<String, dynamic>? _user;
-  bool _isLoading = true;
+  /// Static placeholder profile. The app no longer has a login system, so
+  /// there is no signed-in user to fetch from the backend.
+  static const Map<String, String> _user = {
+    'name': 'User',
+    'email': 'user@example.com',
+  };
 
-  @override
-  void initState() {
-    super.initState();
-    _loadProfile();
-  }
+  /// Locally picked avatar. Not persisted — there is nowhere to upload it to.
+  File? _avatarFile;
 
-  Future<void> _loadProfile() async {
-    try {
-      final token = await TokenStorage.getToken();
-      if (token == null) {
-        // If no token, force logout
-        if (mounted) _logout();
-        return;
-      }
-      final user = await AuthService.getMe(token);
-      if (mounted) {
-        setState(() {
-          _user = user;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load profile: $e')),
-        );
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _logout() async {
-    await TokenStorage.deleteToken();
-    await TokenStorage.deleteUserData();
-    if (mounted) {
-      Navigator.pushNamedAndRemoveUntil(context, '/welcome', (route) => false);
-    }
-  }
-
-  Future<void> _pickAndUploadAvatar() async {
+  Future<void> _pickAvatar() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
       source: ImageSource.gallery,
@@ -63,56 +31,15 @@ class _ProfilePageState extends State<ProfilePage> {
     );
     if (picked == null) return;
 
-    setState(() => _isLoading = true);
-
-    try {
-      final token = await TokenStorage.getToken();
-      if (token == null) {
-        if (mounted) _logout();
-        return;
-      }
-
-      await AuthService.uploadAvatar(
-        token: token,
-        filePath: picked.path,
-      );
-
-      // Refresh profile to show new avatar
-      await _loadProfile();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Avatar updated successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to upload avatar: $e')),
-        );
-        setState(() => _isLoading = false);
-      }
+    if (mounted) {
+      setState(() => _avatarFile = File(picked.path));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // If loading, show a simple spinner on the dark background
-    if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(
-          child: CircularProgressIndicator(color: AppColors.orange),
-        ),
-      );
-    }
-
-    final name = _user?['name'] ?? 'User';
-    final email = _user?['email'] ?? 'user@example.com';
-    final avatarUrl = _user?['avatar'] as String?;
+    final name = _user['name']!;
+    final email = _user['email']!;
 
     return Scaffold(
       backgroundColor: const Color(0xFF001E2E), // brand-deep
@@ -174,7 +101,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: Column(
                   children: [
                     // ── Profile Card ──
-                    _buildProfileCard(name, email, avatarUrl),
+                    _buildProfileCard(name, email),
                     const SizedBox(height: 24),
 
                     // ── Stats Grid ──
@@ -215,37 +142,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         label: 'Subscription',
                         value: 'Pro Plan',
                       ),
-                      _MenuItem(
-                        icon: Icons.lock,
-                        label: 'Change Password',
-                        // No value, just arrow
-                      ),
                     ]),
-
-                    const SizedBox(height: 32),
-
-                    // ── Logout ──
-                    TextButton.icon(
-                      onPressed: _logout,
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.burnt,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                      icon: const Icon(Icons.logout, size: 20),
-                      label: const Text(
-                        'Log Out',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -256,7 +153,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildProfileCard(String name, String email, String? avatarUrl) {
+  Widget _buildProfileCard(String name, String email) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -285,14 +182,14 @@ class _ProfilePageState extends State<ProfilePage> {
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.orange, width: 3),
                   color: AppColors.dark,
-                  image: (avatarUrl != null && avatarUrl.isNotEmpty)
+                  image: _avatarFile != null
                       ? DecorationImage(
-                          image: NetworkImage(avatarUrl),
+                          image: FileImage(_avatarFile!),
                           fit: BoxFit.cover,
                         )
                       : null,
                 ),
-                child: avatarUrl == null
+                child: _avatarFile == null
                     ? Icon(
                         Icons.person,
                         size: 48,
@@ -304,7 +201,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 bottom: 0,
                 right: 0,
                 child: GestureDetector(
-                  onTap: _pickAndUploadAvatar,
+                  onTap: _pickAvatar,
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(

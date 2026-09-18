@@ -3,12 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:alarm/alarm.dart';
 import 'theme/app_theme.dart';
 import 'pages/splash_page.dart';
-import 'pages/welcome_page.dart';
-import 'pages/login_page.dart';
-import 'pages/signup_page.dart';
-import 'pages/forgot_password_page.dart';
-import 'pages/reset_password_page.dart';
-import 'pages/onboarding_page.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/schedule_mock_page.dart';
@@ -63,12 +57,6 @@ class _ExitZeroAppState extends State<ExitZeroApp> {
       initialRoute: '/',
       routes: {
         '/': (context) => const SplashPage(),
-        '/welcome': (context) => const WelcomePage(),
-        '/login': (context) => const LoginPage(),
-        '/signup': (context) => const SignupPage(),
-        '/forgot-password': (context) => const ForgotPasswordPage(),
-        '/reset-password': (context) => const ResetPasswordPage(),
-        '/onboarding': (context) => const OnboardingPage(),
         '/dashboard': (context) => const DashboardPage(),
         '/profile': (context) => const ProfilePage(),
         '/schedule-mock': (context) => const ScheduleMockPage(),

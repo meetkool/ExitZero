@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'token_storage.dart';
 import '../models/mock_interview.dart';
 import 'api_config.dart';
 
@@ -11,10 +10,6 @@ class InterviewService {
   static final StreamController<void> _interviewsUpdated = StreamController<void>.broadcast();
   static Stream<void> get onInterviewsUpdated => _interviewsUpdated.stream;
 
-  Future<String?> _getToken() async {
-    return TokenStorage.getToken();
-  }
-// ... existing methods ...
 
   Future<MockInterview> createInterview(MockInterview interview) async {
     final headers = await _getHeaders();
@@ -117,16 +112,14 @@ class InterviewService {
 // ... rest of file ...
 
   Future<Map<String, String>> _getHeaders() async {
-    final token = await _getToken();
     return {
       'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
     };
   }
 
   Future<List<MockInterview>> getInterviews({String? status, String? date}) async {
     final headers = await _getHeaders();
-    // Add trailing slash to avoid 307 redirect which strips Authorization header
+    // Add trailing slash to avoid a 307 redirect
     var url = Uri.parse('${ApiConfig.interviews}/');
     final Map<String, String> queryParams = {};
     if (status != null) queryParams['status'] = status;
