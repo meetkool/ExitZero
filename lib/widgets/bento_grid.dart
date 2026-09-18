@@ -210,6 +210,9 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
   /// Drives edge auto-scroll while a card is being dragged.
   Timer? _autoScroll;
 
+  /// Measures where cards actually sit on screen, for scroll anchoring.
+  final GlobalKey _stackKey = GlobalKey();
+
   // Cache
   double _gridW = 0;
   double _gap = 0;
@@ -274,8 +277,74 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
 
   // ── Edit mode ──────────────────────────────────────────────────────────────
 
-  void _enterEdit() {
+  /// Where card [i] currently sits on screen, or null if we cannot measure.
+  double? _cardGlobalTop(int i) {
+    final box = _stackKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return null;
+    final layout = _layout;
+    if (layout == null || i < 0 || i >= layout.rects.length) return null;
+    return box.localToGlobal(Offset.zero).dy + layout.rects[i].top;
+  }
+
+  /// The card sitting nearest the top of the viewport.
+  int? _topmostVisibleIndex() {
+    final box = _stackKey.currentContext?.findRenderObject();
+    final layout = _layout;
+    if (box is! RenderBox || !box.hasSize || layout == null) return null;
+    if (layout.rects.isEmpty) return null;
+
+    final originY = box.localToGlobal(Offset.zero).dy;
+    final viewport = Scrollable.maybeOf(context)?.context.findRenderObject();
+    final viewTop = viewport is RenderBox
+        ? viewport.localToGlobal(Offset.zero).dy
+        : 0.0;
+
+    int best = 0;
+    double bestDist = double.infinity;
+    for (int i = 0; i < layout.rects.length; i++) {
+      final d = (originY + layout.rects[i].top - viewTop).abs();
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  /// Keeps card [index] visually still across a layout change.
+  ///
+  /// Entering edit mode widens every gap and inserts the header, which pushes
+  /// cards down by a growing amount — far enough that the card you just
+  /// grabbed could slide off the bottom of the screen. Measure the card
+  /// before the change, measure it again after the frame, and take the
+  /// difference out of the scroll offset.
+  void _anchorAround(int? index) {
+    if (index == null) return;
+    final before = _cardGlobalTop(index);
+    if (before == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final after = _cardGlobalTop(index);
+      final scrollable = Scrollable.maybeOf(context);
+      if (after == null || scrollable == null) return;
+
+      final delta = after - before;
+      if (delta.abs() < 1) return;
+
+      final pos = scrollable.position;
+      final target = (pos.pixels + delta).clamp(
+        pos.minScrollExtent,
+        pos.maxScrollExtent,
+      );
+      if ((target - pos.pixels).abs() < 1) return;
+      pos.jumpTo(target);
+    });
+  }
+
+  void _enterEdit({int? anchorIndex}) {
     if (_editMode) return;
+    _anchorAround(anchorIndex ?? _topmostVisibleIndex());
     HapticFeedback.mediumImpact(); // Distinct buzz when entering edit mode
     _jiggle.repeat(reverse: true);
     setState(() => _editMode = true);
@@ -284,6 +353,7 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
 
   void _exitEdit() {
     if (!_editMode) return;
+    _anchorAround(_topmostVisibleIndex());
     _stopAutoScroll();
     _jiggle
       ..stop()
@@ -473,8 +543,23 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
   }
 
   void _longPressStart(int i, LongPressStartDetails d) {
-    _enterEdit();
+    _enterEdit(anchorIndex: i);
     _startDrag(i, d.globalPosition);
+  }
+
+  /// Releases any interaction still believed to be in progress.
+  ///
+  /// Called on every raw pointer-up, so the grid cannot stay latched into a
+  /// drag or resize if a recognizer disappeared before reporting its end.
+  void _releaseIfStuck() {
+    if (_dragIdx != null) _dragFinish();
+    if (_resizeIdx != null) _resEnd(DragEndDetails());
+  }
+
+  /// A long press can be cancelled without ever reporting an end. Without
+  /// this the grid would sit in a drag that never finishes.
+  void _longPressCancel() {
+    if (_dragIdx != null) _dragFinish();
   }
 
   void _longPressMove(LongPressMoveUpdateDetails d) {
@@ -619,35 +704,46 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
         _gap = _editMode ? widget.spacing + 20 : widget.spacing;
         _layout = _computeLayout(_items, _gridW, _gap);
 
-        return GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: _editMode ? _exitEdit : null,
-          child: Padding(
-            padding: widget.padding,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeOut,
-                  child: _editMode
-                      ? _buildEditHeader()
-                      : const SizedBox.shrink(),
-                ),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  height: _layout!.totalHeight,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      if (_dragIdx != null) _dropPlaceholder(ctx),
-                      for (int i = 0; i < _items.length; i++)
-                        if (i != _dragIdx) _positioned(i),
-                      if (_dragIdx != null) _positioned(_dragIdx!),
-                    ],
+        return Listener(
+          // Backstop. A gesture recognizer can be disposed mid-gesture by a
+          // rebuild that changes which callbacks are present, and then its end
+          // callback never arrives — leaving the grid stuck in a drag with
+          // scrolling pinned and no way for the user to recover. A raw
+          // pointer-up always arrives, so it releases the grid regardless of
+          // what happened to the recognizers.
+          onPointerUp: (_) => _releaseIfStuck(),
+          onPointerCancel: (_) => _releaseIfStuck(),
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: _editMode ? _exitEdit : null,
+            child: Padding(
+              padding: widget.padding,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut,
+                    child: _editMode
+                        ? _buildEditHeader()
+                        : const SizedBox.shrink(),
                   ),
-                ),
-              ],
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    height: _layout!.totalHeight,
+                    child: Stack(
+                      key: _stackKey,
+                      clipBehavior: Clip.none,
+                      children: [
+                        if (_dragIdx != null) _dropPlaceholder(ctx),
+                        for (int i = 0; i < _items.length; i++)
+                          if (i != _dragIdx) _positioned(i),
+                        if (_dragIdx != null) _positioned(_dragIdx!),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -892,27 +988,36 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
 
     // Gestures.
     //
-    // In edit mode the card body deliberately has no pan recognizer: that is
-    // what lets the page still scroll while arranging. Moving a card happens
-    // through its grip, resizing through a corner, and both of those claim the
-    // gesture immediately so the scroll view cannot take it.
-    if (_editMode) {
-      c = GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        // Swallow taps so touching a card does not dismiss edit mode; only
-        // empty space and Done do that.
-        onTap: () {},
-        onDoubleTap: item.minSpan == item.maxSpan ? null : () => _toggleSpan(i),
-        child: c,
-      );
-    } else {
-      c = GestureDetector(
-        onLongPressStart: (d) => _longPressStart(i, d),
-        onLongPressMoveUpdate: _longPressMove,
-        onLongPressEnd: _longPressEnd,
-        child: c,
-      );
-    }
+    // One detector for both modes, on purpose. When the long-press handlers
+    // lived only on a non-edit branch, entering edit mode rebuilt the card
+    // with a different set of callbacks and disposed the
+    // LongPressGestureRecognizer in the middle of the gesture — so
+    // onLongPressEnd never arrived, _dragFinish never ran, and the grid was
+    // left believing a drag was still in progress: every other card dimmed,
+    // the scroll view pinned, and the auto-scroll timer running forever.
+    // Keeping the same callbacks present in both modes lets the element and
+    // its recognizer survive the switch.
+    //
+    // The card body still has no pan recognizer, which is what leaves plain
+    // drags to the scroll view. Long-press holds still before it fires, so it
+    // coexists with scrolling; the grip and corners claim their gesture
+    // immediately for anyone who does not want to wait.
+    c = GestureDetector(
+      behavior: _editMode
+          ? HitTestBehavior.opaque
+          : HitTestBehavior.deferToChild,
+      onLongPressStart: (d) => _longPressStart(i, d),
+      onLongPressMoveUpdate: _longPressMove,
+      onLongPressEnd: _longPressEnd,
+      onLongPressCancel: _longPressCancel,
+      // Swallow taps in edit mode so touching a card does not dismiss it;
+      // only empty space and Done do that.
+      onTap: _editMode ? () {} : null,
+      onDoubleTap: _editMode && item.minSpan != item.maxSpan
+          ? () => _toggleSpan(i)
+          : null,
+      child: c,
+    );
 
     return c;
   }
