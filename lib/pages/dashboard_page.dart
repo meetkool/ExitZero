@@ -65,6 +65,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
   /// Cards contributed by installed remote widgets.
   List<BentoGridItem> _remoteItems = [];
+
+  /// Built-in cards the user switched off in Settings > Widgets.
+  Set<String> _hiddenBuiltIns = {};
   StreamSubscription? _installedWidgetsSubscription;
 
   @override
@@ -188,6 +191,7 @@ class _DashboardPageState extends State<DashboardPage> {
   /// the dashboard renders immediately and offline; the store is what
   /// refreshes them.
   Future<void> _loadRemoteWidgets() async {
+    final hidden = await InstalledWidgetsStore.hiddenBuiltIns();
     final ids = await InstalledWidgetsStore.installedIds();
     final items = <BentoGridItem>[];
 
@@ -219,6 +223,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
     if (!mounted) return;
     setState(() {
+      _hiddenBuiltIns = hidden;
       _remoteItems = items;
       _layoutVersion++;
     });
@@ -382,7 +387,11 @@ class _DashboardPageState extends State<DashboardPage> {
   // ... (keeping _buildItems and _applyLayout as they are, no changes needed there conceptually, just reusing existing logic)
 
   List<BentoGridItem> _buildItems() {
-    final defaults = _defaultItems();
+    // Remote widgets carry a `widget:` prefix, so only built-in ids are
+    // matched against the hidden set.
+    final defaults = _defaultItems()
+        .where((item) => !_hiddenBuiltIns.contains(item.id))
+        .toList();
     if (_layoutState.isEmpty) return defaults;
 
     final byId = {for (final item in defaults) item.id: item};

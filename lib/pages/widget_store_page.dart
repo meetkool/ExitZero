@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/widget_manifest.dart';
+import '../services/builtin_widgets.dart';
 import '../services/installed_widgets_store.dart';
 import '../services/widget_data_service.dart';
 import '../services/widget_registry_service.dart';
@@ -20,6 +21,7 @@ class WidgetStorePage extends StatefulWidget {
 class _WidgetStorePageState extends State<WidgetStorePage> {
   List<WidgetRegistryEntry> _entries = const [];
   Set<String> _installed = {};
+  Set<String> _hiddenBuiltIns = {};
   bool _loading = true;
   String? _error;
 
@@ -39,15 +41,29 @@ class _WidgetStorePageState extends State<WidgetStorePage> {
       forceRefresh: force,
     );
     final installed = await InstalledWidgetsStore.installedIds();
+    final hidden = await InstalledWidgetsStore.hiddenBuiltIns();
 
     if (!mounted) return;
     setState(() {
       _entries = entries;
       _installed = installed.toSet();
+      _hiddenBuiltIns = hidden;
       _loading = false;
       _error = entries.isEmpty
-          ? 'No widgets found. Check your connection, or the inventory has not been published yet.'
+          ? 'Could not reach the inventory. The widgets built into the app are still listed above.'
           : null;
+    });
+  }
+
+  Future<void> _toggleBuiltIn(BuiltInWidget w, bool enabled) async {
+    await InstalledWidgetsStore.setBuiltInEnabled(w.id, enabled);
+    if (!mounted) return;
+    setState(() {
+      if (enabled) {
+        _hiddenBuiltIns.remove(w.id);
+      } else {
+        _hiddenBuiltIns.add(w.id);
+      }
     });
   }
 
@@ -221,7 +237,8 @@ class _WidgetStorePageState extends State<WidgetStorePage> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Text(
-                '${_installed.length} installed  ·  ${_entries.length} available',
+                '${BuiltInWidgets.all.length - _hiddenBuiltIns.length + _installed.length}'
+                ' on your dashboard  ·  ${_entries.length} in the inventory',
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.white.withValues(alpha: 0.5),
@@ -243,54 +260,147 @@ class _WidgetStorePageState extends State<WidgetStorePage> {
       );
     }
 
-    if (_entries.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.widgets_outlined,
-                size: 40,
-                color: Colors.white.withValues(alpha: 0.3),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                _error ?? 'Nothing here yet.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.white.withValues(alpha: 0.6),
-                ),
-              ),
-              const SizedBox(height: 20),
-              TextButton.icon(
-                onPressed: () => _load(force: true),
-                icon: const Icon(Icons.refresh, color: AppColors.orange),
-                label: const Text(
-                  'Try again',
-                  style: TextStyle(color: AppColors.orange),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return RefreshIndicator(
       color: AppColors.orange,
       backgroundColor: AppColors.dark,
       onRefresh: () => _load(force: true),
-      child: ListView.separated(
+      child: ListView(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
-        itemCount: _entries.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, i) {
-          if (i == _entries.length) return _browseLink();
-          return _row(_entries[i]);
-        },
+        children: [
+          _sectionLabel('BUILT IN'),
+          const SizedBox(height: 10),
+          for (final w in BuiltInWidgets.all) ...[
+            _builtInRow(w),
+            const SizedBox(height: 10),
+          ],
+          const SizedBox(height: 14),
+          _sectionLabel('FROM THE INVENTORY'),
+          const SizedBox(height: 10),
+          if (_entries.isEmpty)
+            _inventoryEmpty()
+          else
+            for (final e in _entries) ...[
+              _row(e),
+              const SizedBox(height: 12),
+            ],
+          _browseLink(),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text) => Text(
+    text,
+    style: TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.bold,
+      letterSpacing: 1.6,
+      color: Colors.white.withValues(alpha: 0.45),
+    ),
+  );
+
+  /// A card that ships with the app. It cannot be removed, only switched off.
+  Widget _builtInRow(BuiltInWidget w) {
+    final enabled = !_hiddenBuiltIns.contains(w.id);
+    final accent = WidgetColors.resolve(w.accent, fallback: AppColors.orange);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: enabled
+              ? accent.withValues(alpha: 0.35)
+              : Colors.white.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: enabled ? 0.2 : 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              WidgetIcons.resolve(w.icon),
+              color: enabled ? accent : Colors.white.withValues(alpha: 0.3),
+              size: 19,
+            ),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  w.name,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withValues(alpha: enabled ? 1 : 0.5),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  w.description,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.35,
+                    color: Colors.white.withValues(alpha: enabled ? 0.55 : 0.3),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: enabled,
+            onChanged: (v) => _toggleBuiltIn(w, v),
+            activeTrackColor: accent,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inventoryEmpty() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.cloud_off,
+            size: 26,
+            color: Colors.white.withValues(alpha: 0.3),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            _error ?? 'Nothing published yet.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.4,
+              color: Colors.white.withValues(alpha: 0.55),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextButton.icon(
+            onPressed: () => _load(force: true),
+            icon: const Icon(Icons.refresh, size: 16, color: AppColors.orange),
+            label: const Text(
+              'Try again',
+              style: TextStyle(color: AppColors.orange, fontSize: 12),
+            ),
+          ),
+        ],
       ),
     );
   }

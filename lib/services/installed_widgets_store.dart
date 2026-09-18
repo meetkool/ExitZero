@@ -10,6 +10,11 @@ class InstalledWidgetsStore {
   static const String _installedKey = 'installed_widget_ids';
   static const String _configKey = 'installed_widget_config';
 
+  /// Built-in cards the user has switched off. Stored as the exceptions
+  /// rather than the enabled set, so a card added in a later release shows up
+  /// by default instead of staying invisible.
+  static const String _hiddenBuiltInsKey = 'hidden_builtin_widget_ids';
+
   /// Broadcasts whenever the installed set changes, so the dashboard can
   /// rebuild without being navigated back to.
   static final StreamController<void> _changes =
@@ -50,6 +55,31 @@ class InstalledWidgetsStore {
     all.remove(id);
     await prefs.setString(_configKey, jsonEncode(all));
 
+    _changes.add(null);
+  }
+
+  // ── Built-in cards ──
+
+  static Future<Set<String>> hiddenBuiltIns() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getStringList(_hiddenBuiltInsKey) ?? const []).toSet();
+  }
+
+  static Future<bool> isBuiltInEnabled(String id) async {
+    final hidden = await hiddenBuiltIns();
+    return !hidden.contains(id);
+  }
+
+  static Future<void> setBuiltInEnabled(String id, bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    final hidden = (prefs.getStringList(_hiddenBuiltInsKey) ?? <String>[])
+        .toList();
+    if (enabled) {
+      hidden.remove(id);
+    } else if (!hidden.contains(id)) {
+      hidden.add(id);
+    }
+    await prefs.setStringList(_hiddenBuiltInsKey, hidden);
     _changes.add(null);
   }
 
