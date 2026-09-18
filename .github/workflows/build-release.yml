@@ -65,6 +65,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
+          # Without this the tag is created at the default branch head, so a
+          # release built from another branch pointed at main's code.
+          target_commitish: ${{ github.sha }}
           name: "ExitZero ${{ steps.version.outputs.tag }}"
           prerelease: ${{ steps.version.outputs.prerelease }}
           body: |
