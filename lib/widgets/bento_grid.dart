@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -95,6 +97,24 @@ class _Layout {
   _Layout(this.rects, this.totalHeight);
 }
 
+/// A pan recognizer that claims the gesture the instant a finger lands.
+///
+/// A plain [PanGestureRecognizer] only wins after ~36px of movement
+/// (`kPanSlop`), while the enclosing scroll view's vertical drag recognizer
+/// wins after ~18px (`kTouchSlop`). On a vertical swipe the scrollable
+/// therefore always won and the card never lifted. Accepting up front removes
+/// the race entirely, so a grip or resize handle responds immediately and the
+/// page cannot steal the drag.
+class _EagerPanRecognizer extends PanGestureRecognizer {
+  _EagerPanRecognizer({super.debugOwner});
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
+  }
+}
+
 enum _ResizeHandle {
   top,
   bottom,
@@ -187,6 +207,9 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
   // Interaction
   bool _interactionActive = false;
 
+  /// Drives edge auto-scroll while a card is being dragged.
+  Timer? _autoScroll;
+
   // Cache
   double _gridW = 0;
   double _gap = 0;
@@ -220,6 +243,7 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _stopAutoScroll();
     _jiggle.dispose();
     super.dispose();
   }
@@ -260,6 +284,7 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
 
   void _exitEdit() {
     if (!_editMode) return;
+    _stopAutoScroll();
     _jiggle
       ..stop()
       ..value = 0;
@@ -291,6 +316,7 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
       _dragDelta = Offset.zero;
       _lastGlobal = globalPosition;
     });
+    _startAutoScroll();
   }
 
   void _dragStart(int i, DragStartDetails d) {
@@ -298,63 +324,135 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
   }
 
   void _dragUpdate(DragUpdateDetails d) {
+    _lastGlobal = d.globalPosition;
     _dragUpdateWithDelta(d.delta);
   }
 
   void _dragUpdateWithDelta(Offset delta) {
     if (_dragIdx == null || _layout == null) return;
     _dragDelta += delta;
-
-    final myRect = _layout!.rects[_dragIdx!];
-    final cx = myRect.center.dx + _dragDelta.dx;
-    final cy = myRect.center.dy + _dragDelta.dy;
-
-    // ── Check swap with NEXT item ──
-    if (_dragIdx! + 1 < _items.length) {
-      final nr = _layout!.rects[_dragIdx! + 1];
-      final sameRow = (myRect.top - nr.top).abs() < 5;
-      if (sameRow ? cx > nr.center.dx : cy > nr.center.dy) {
-        _swapWith(_dragIdx! + 1);
-        setState(() {});
-        return;
-      }
-    }
-
-    // ── Check swap with PREV item ──
-    if (_dragIdx! > 0) {
-      final pr = _layout!.rects[_dragIdx! - 1];
-      final sameRow = (myRect.top - pr.top).abs() < 5;
-      if (sameRow ? cx < pr.center.dx : cy < pr.center.dy) {
-        _swapWith(_dragIdx! - 1);
-        setState(() {});
-        return;
-      }
-    }
-
+    _maybeReorder();
     setState(() {});
   }
 
-  void _swapWith(int target) {
-    final oldRect = _layout!.rects[_dragIdx!];
+  /// How much closer a slot must be than the card's own before we commit to it.
+  ///
+  /// Comparing raw distances makes a card parked on a boundary flip back and
+  /// forth every frame; requiring the target to be clearly nearer gives the
+  /// move a dead zone and keeps it steady.
+  static const double _reorderHysteresis = 0.65;
 
-    // Swap items
-    final temp = _items[_dragIdx!];
-    _items[_dragIdx!] = _items[target];
-    _items[target] = temp;
+  /// Moves the dragged card to whichever slot its centre is now closest to.
+  ///
+  /// The previous version only ever compared against the immediate neighbours,
+  /// so crossing several slots took one deliberate centre-crossing each.
+  void _maybeReorder() {
+    if (_dragIdx == null || _layout == null) return;
+    final from = _dragIdx!;
+    final myRect = _layout!.rects[from];
+    final centre = Offset(
+      myRect.center.dx + _dragDelta.dx,
+      myRect.center.dy + _dragDelta.dy,
+    );
 
-    // Recalculate layout
+    final double homeDist = (myRect.center - centre).distance;
+
+    int best = from;
+    double bestDist = double.infinity;
+    for (int j = 0; j < _items.length; j++) {
+      if (j == from) continue;
+      final d = (_layout!.rects[j].center - centre).distance;
+      if (d < bestDist) {
+        bestDist = d;
+        best = j;
+      }
+    }
+
+    if (best == from) return;
+    if (bestDist > homeDist * _reorderHysteresis) return;
+    _moveTo(best);
+  }
+
+  void _moveTo(int target) {
+    final from = _dragIdx!;
+    final oldRect = _layout!.rects[from];
+
+    // Lift the card out and drop it in at the target index, so the cards in
+    // between shift along by one instead of teleporting past each other.
+    final item = _items.removeAt(from);
+    _items.insert(target, item);
+
     final nl = _computeLayout(_items, _gridW, _gap);
     final newRect = nl.rects[target];
 
-    // Adjust delta so the dragged card doesn't visually jump
+    // Keep the card under the finger across the reflow.
     _dragDelta += Offset(
       oldRect.left - newRect.left,
       oldRect.top - newRect.top,
     );
     _dragIdx = target;
     _layout = nl;
-    HapticFeedback.selectionClick(); // Light click on swap
+    HapticFeedback.selectionClick();
     _emitLayout();
+  }
+
+  // ── Edge auto-scroll ───────────────────────────────────────────────────────
+
+  void _startAutoScroll() {
+    _autoScroll?.cancel();
+    _autoScroll = Timer.periodic(
+      const Duration(milliseconds: 16),
+      (_) => _tickAutoScroll(),
+    );
+  }
+
+  void _stopAutoScroll() {
+    _autoScroll?.cancel();
+    _autoScroll = null;
+  }
+
+  /// Creeps the page while a dragged card is held near the top or bottom edge.
+  ///
+  /// Dragging locks the enclosing scroll view, so without this a card could
+  /// never travel further than one screen.
+  void _tickAutoScroll() {
+    if (!mounted || _dragIdx == null) return;
+
+    final scrollable = Scrollable.maybeOf(context);
+    if (scrollable == null) return;
+
+    final box = scrollable.context.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return;
+
+    final top = box.localToGlobal(Offset.zero).dy;
+    final bottom = top + box.size.height;
+
+    const double zone = 100;
+    const double maxSpeed = 14;
+
+    double v = 0;
+    if (_lastGlobal.dy < top + zone) {
+      v = -maxSpeed * ((top + zone - _lastGlobal.dy) / zone).clamp(0.0, 1.0);
+    } else if (_lastGlobal.dy > bottom - zone) {
+      v = maxSpeed * ((_lastGlobal.dy - (bottom - zone)) / zone).clamp(0.0, 1.0);
+    }
+    if (v == 0) return;
+
+    final pos = scrollable.position;
+    final target = (pos.pixels + v).clamp(
+      pos.minScrollExtent,
+      pos.maxScrollExtent,
+    );
+    final applied = target - pos.pixels;
+    if (applied.abs() < 0.01) return;
+
+    pos.jumpTo(target);
+
+    // The grid slid under a stationary finger, so shift the card by the same
+    // amount to keep it pinned to the touch point.
+    _dragDelta += Offset(0, applied);
+    _maybeReorder();
+    setState(() {});
   }
 
   void _dragEnd(DragEndDetails d) {
@@ -362,6 +460,7 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
   }
 
   void _dragFinish() {
+    _stopAutoScroll();
     if (_dragIdx != null) {
       // Feedback on drop
       HapticFeedback.lightImpact();
@@ -541,6 +640,7 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
+                      if (_dragIdx != null) _dropPlaceholder(ctx),
                       for (int i = 0; i < _items.length; i++)
                         if (i != _dragIdx) _positioned(i),
                       if (_dragIdx != null) _positioned(_dragIdx!),
@@ -558,7 +658,27 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
   Widget _buildEditHeader() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildEditHeaderRow(),
+          const SizedBox(height: 8),
+          Text(
+            'Drag the handle at the top of a card to move it.\n'
+            'Pull a white corner dot to resize. Double-tap to change width.',
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.45,
+              color: Colors.white.withValues(alpha: 0.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditHeaderRow() {
+    return Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
@@ -625,7 +745,6 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
             ],
           ),
         ],
-      ),
     );
   }
 
@@ -641,7 +760,7 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
       t += _dragDelta.dy;
     }
 
-    final child = _cardWidget(i, dragging);
+    final child = _cardWidget(i, dragging, r.width, r.height);
 
     if (dragging || i == _resizeIdx) {
       return Positioned(
@@ -666,14 +785,67 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
     );
   }
 
-  Widget _cardWidget(int i, bool dragging) {
+  /// Dashed outline marking the slot the dragged card will drop into.
+  Widget _dropPlaceholder(BuildContext context) {
+    final r = _layout!.rects[_dragIdx!];
+    return Positioned(
+      left: r.left,
+      top: r.top,
+      width: r.width,
+      height: r.height,
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: _DashedSlotPainter(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _cardWidget(int i, bool dragging, double cardW, double cardH) {
     final item = _items[i];
-    Widget c = SizedBox.expand(child: item.card);
+    Widget inner = SizedBox.expand(child: item.card);
 
-    // 1. Block inner interactions (buttons etc.) in edit mode
-    if (_editMode) c = AbsorbPointer(child: c);
+    // Block the card's own buttons while arranging.
+    if (_editMode) inner = AbsorbPointer(child: inner);
 
-    // 2. Jiggle animation (only if not currently being dragged)
+    Widget c = inner;
+
+    // Card plus its chrome. Keeping the handles in here — inside the
+    // transforms applied below — means the dots stay glued to the card's
+    // visible edge and stay touchable where they are drawn. Previously the
+    // handles sat outside the scale, so on a shrunken card they floated off
+    // the corner and you had to press where the dot was not.
+    if (_editMode) {
+      c = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(child: inner),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    width: 1.5,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (i == _resizeIdx)
+            Positioned.fill(
+              child: IgnorePointer(child: Center(child: _sizeChip(i))),
+            ),
+          ..._buildResizeHandles(i, item, cardW, cardH),
+          _grip(i),
+        ],
+      );
+    }
+
+    // Jiggle, but never the card in hand.
     if (_editMode && !dragging) {
       c = AnimatedBuilder(
         animation: _jiggle,
@@ -685,46 +857,16 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
       );
     }
 
-    // 3. Non-selected boxes: shrink, gray out, and fade
-    //    When dragging one box, all others become small & grayed
     final bool isInactive = _dragIdx != null && !dragging;
 
-    // Grayscale matrix for desaturation effect
-    const grayscaleMatrix = ColorFilter.matrix(<double>[
-      0.2126,
-      0.7152,
-      0.0722,
-      0,
-      0,
-      0.2126,
-      0.7152,
-      0.0722,
-      0,
-      0,
-      0.2126,
-      0.7152,
-      0.0722,
-      0,
-      0,
-      0,
-      0,
-      0,
-      1,
-      0,
-    ]);
-
-    if (isInactive) {
-      c = ColorFiltered(colorFilter: grayscaleMatrix, child: c);
-    }
-
-    // 4. Scale & Shadow - dragged box pops up, inactive boxes shrink down
+    // Only the card in hand transforms. The others used to be desaturated,
+    // faded to 0.4 and shrunk to 0.92 all at once, which made the board hard
+    // to read mid-drag; a single gentle fade is enough to show what is lifted.
     c = AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOutCubic,
       transform: dragging
-          ? Matrix4.diagonal3Values(1.05, 1.05, 1.0)
-          : isInactive
-          ? Matrix4.diagonal3Values(0.92, 0.92, 1.0)
+          ? Matrix4.diagonal3Values(1.04, 1.04, 1.0)
           : Matrix4.identity(),
       transformAlignment: Alignment.center,
       decoration: BoxDecoration(
@@ -742,30 +884,25 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
       child: c,
     );
 
-    // 5. Fade inactive boxes
     c = AnimatedOpacity(
-      opacity: isInactive ? 0.4 : 1.0,
+      opacity: isInactive ? 0.7 : 1.0,
       duration: const Duration(milliseconds: 200),
       child: c,
     );
 
-    // 6. Gestures
-    // If in edit mode, use Listener for immediate drag response (no gesture competition)
+    // Gestures.
+    //
+    // In edit mode the card body deliberately has no pan recognizer: that is
+    // what lets the page still scroll while arranging. Moving a card happens
+    // through its grip, resizing through a corner, and both of those claim the
+    // gesture immediately so the scroll view cannot take it.
     if (_editMode) {
       c = GestureDetector(
         behavior: HitTestBehavior.opaque,
+        // Swallow taps so touching a card does not dismiss edit mode; only
+        // empty space and Done do that.
+        onTap: () {},
         onDoubleTap: item.minSpan == item.maxSpan ? null : () => _toggleSpan(i),
-        // Use onPanDown for immediate feedback, then onPanStart for actual drag
-        onPanDown: (_) {}, // Immediately claim the gesture
-        onPanStart: (d) => _dragStart(i, d),
-        onPanUpdate: _dragUpdate,
-        onPanEnd: _dragEnd,
-        onPanCancel: () {
-          // Clean up if drag was cancelled
-          if (_dragIdx == i) {
-            _dragFinish();
-          }
-        },
         child: c,
       );
     } else {
@@ -777,113 +914,221 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
       );
     }
 
-    // 6. Resize Handles Overlays
-    if (_editMode) {
-      c = Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(child: c),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    width: 1.5,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          ..._buildResizeHandles(i, item),
-        ],
-      );
-    }
-
     return c;
   }
 
-  List<Widget> _buildResizeHandles(int i, _Item item) {
+  /// Live size readout while resizing, so the 8px height snap and the
+  /// half/full width snap are visible rather than a surprise on release.
+  Widget _sizeChip(int i) {
+    final item = _items[i];
+    final span = _resizePendingSpan ?? item.columnSpan;
+    final h = _resizePreview?.height ?? item.height;
+    final snapped = (h / 8).round() * 8;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+      ),
+      child: Text(
+        '${span >= 2 ? 'Full' : 'Half'} width  ·  ${snapped}px',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  /// The move handle. A labelled grip reads as "pull me" in a way that corner
+  /// dots — which look like rivets in this card style — never did.
+  Widget _grip(int i) {
+    return Positioned(
+      top: 4,
+      left: 0,
+      right: 0,
+      height: 40,
+      child: Center(
+        child: RawGestureDetector(
+          behavior: HitTestBehavior.opaque,
+          gestures: {
+            _EagerPanRecognizer:
+                GestureRecognizerFactoryWithHandlers<_EagerPanRecognizer>(
+                  () => _EagerPanRecognizer(debugOwner: this),
+                  (r) {
+                    r.onStart = (d) => _dragStart(i, d);
+                    r.onUpdate = _dragUpdate;
+                    r.onEnd = _dragEnd;
+                    // Not `_dragIdx == i`: reordering reassigns _dragIdx as
+                    // the card travels, so comparing against the captured
+                    // index would skip cleanup and leave the card stuck
+                    // lifted with the auto-scroll timer still running.
+                    r.onCancel = () {
+                      if (_dragIdx != null) _dragFinish();
+                    };
+                  },
+                ),
+          },
+          child: Container(
+            width: 76,
+            height: 40,
+            alignment: Alignment.center,
+            child: Container(
+              width: 54,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.32),
+                ),
+              ),
+              child: Icon(
+                Icons.drag_handle,
+                size: 16,
+                color: Colors.white.withValues(alpha: 0.9),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildResizeHandles(
+    int i,
+    _Item item,
+    double cardW,
+    double cardH,
+  ) {
     if (!item.resizable) return const [];
-    // Hide handles on the active card while dragging it to reduce visual clutter
+    // The card in hand is being moved, not resized.
     if (_dragIdx == i) return const [];
 
     final allowHorizontal = item.minSpan != item.maxSpan;
     final allowVertical = item.minHeight != item.maxHeight;
+    if (!allowHorizontal && !allowVertical) return const [];
+
+    // Corners only. Eight handles on a 90px card meant the edge and corner
+    // targets physically overlapped, so which one you got was pot luck. Four
+    // corners cover both axes on their own — the width and height clamps in
+    // _resUpdate pin whichever axis this card does not allow.
+    //
+    // Aim for a 48dp target, shrinking only when the card is too small to
+    // hold four of them without the top and bottom pair colliding.
+    final double box = min(
+      48.0,
+      min(cardH * 0.45, cardW * 0.45),
+    ).clamp(32.0, 48.0);
 
     return [
-      if (allowVertical) _edgeHandle(i, _ResizeHandle.top, Alignment.topCenter),
-      if (allowVertical)
-        _edgeHandle(i, _ResizeHandle.bottom, Alignment.bottomCenter),
-      if (allowHorizontal)
-        _edgeHandle(i, _ResizeHandle.left, Alignment.centerLeft),
-      if (allowHorizontal)
-        _edgeHandle(i, _ResizeHandle.right, Alignment.centerRight),
-      if (allowHorizontal && allowVertical) ...[
-        _cornerHandle(i, _ResizeHandle.topLeft, Alignment.topLeft),
-        _cornerHandle(i, _ResizeHandle.topRight, Alignment.topRight),
-        _cornerHandle(i, _ResizeHandle.bottomLeft, Alignment.bottomLeft),
-        _cornerHandle(i, _ResizeHandle.bottomRight, Alignment.bottomRight),
-      ],
+      _cornerHandle(i, _ResizeHandle.topLeft, box, top: 0, left: 0),
+      _cornerHandle(i, _ResizeHandle.topRight, box, top: 0, right: 0),
+      _cornerHandle(i, _ResizeHandle.bottomLeft, box, bottom: 0, left: 0),
+      _cornerHandle(i, _ResizeHandle.bottomRight, box, bottom: 0, right: 0),
     ];
   }
 
-  Widget _edgeHandle(int i, _ResizeHandle handle, Alignment alignment) {
-    final bool horizontal =
-        handle == _ResizeHandle.top || handle == _ResizeHandle.bottom;
-
-    return Align(
-      alignment: alignment,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onPanDown: (_) => HapticFeedback.selectionClick(),
-        onPanStart: (d) => _resStart(i, handle, d),
-        onPanUpdate: _resUpdate,
-        onPanEnd: _resEnd,
-        child: SizedBox(
-          width: horizontal ? 44 : 20,
-          height: horizontal ? 20 : 44,
-          child: Center(
-            child: Container(
-              width: horizontal ? 26 : 4,
-              height: horizontal ? 4 : 26,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(3),
+  Widget _cornerHandle(
+    int i,
+    _ResizeHandle handle,
+    double box, {
+    double? top,
+    double? left,
+    double? right,
+    double? bottom,
+  }) {
+    return Positioned(
+      top: top,
+      left: left,
+      right: right,
+      bottom: bottom,
+      width: box,
+      height: box,
+      child: RawGestureDetector(
+        // Opaque, not translucent. Translucent let the same touch fall through
+        // to the card underneath, putting two pan recognizers in the arena at
+        // once — which is why a corner sometimes resized and sometimes
+        // dragged the whole card.
+        behavior: HitTestBehavior.opaque,
+        gestures: {
+          _EagerPanRecognizer:
+              GestureRecognizerFactoryWithHandlers<_EagerPanRecognizer>(
+                () => _EagerPanRecognizer(debugOwner: this),
+                (r) {
+                  r.onDown = (_) => HapticFeedback.selectionClick();
+                  r.onStart = (d) => _resStart(i, handle, d);
+                  r.onUpdate = _resUpdate;
+                  r.onEnd = _resEnd;
+                },
               ),
+        },
+        child: Center(
+          child: Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.95),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.black.withValues(alpha: 0.35),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
             ),
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _cornerHandle(int i, _ResizeHandle handle, Alignment alignment) {
-    return Align(
-      alignment: alignment,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onPanDown: (_) => HapticFeedback.selectionClick(),
-        onPanStart: (d) => _resStart(i, handle, d),
-        onPanUpdate: _resUpdate,
-        onPanEnd: _resEnd,
-        child: SizedBox(
-          width: 28,
-          height: 28,
-          child: Center(
-            child: Container(
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.45),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.5)),
-              ),
-            ),
-          ),
-        ),
-      ),
+/// Dashed rounded outline used to show where a dragged card will land.
+class _DashedSlotPainter extends CustomPainter {
+  final Color color;
+  const _DashedSlotPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rrect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      const Radius.circular(24),
+    );
+
+    canvas.drawRRect(
+      rrect,
+      Paint()..color = Colors.white.withValues(alpha: 0.04),
+    );
+
+    final source = Path()..addRRect(rrect);
+    final dashes = Path();
+    for (final metric in source.computeMetrics()) {
+      double d = 0;
+      while (d < metric.length) {
+        final next = min(d + 10.0, metric.length);
+        dashes.addPath(metric.extractPath(d, next), Offset.zero);
+        d = next + 7;
+      }
+    }
+
+    canvas.drawPath(
+      dashes,
+      Paint()
+        ..color = color.withValues(alpha: 0.75)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
     );
   }
+
+  @override
+  bool shouldRepaint(_DashedSlotPainter old) => old.color != color;
 }
