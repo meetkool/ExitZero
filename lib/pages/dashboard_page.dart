@@ -24,6 +24,9 @@ import '../services/ntfy_service.dart';
 import '../../services/local_notification_service.dart';
 import '../../services/notification_manager.dart';
 import 'notifications_page.dart';
+import '../services/installed_widgets_store.dart';
+import '../services/widget_registry_service.dart';
+import '../widgets/remote/remote_widget_card.dart';
 import 'dashboard/cards/notification_card.dart';
 import 'dashboard/cards/alarm_card.dart';
 import 'package:alarm/alarm.dart';
@@ -60,6 +63,10 @@ class _DashboardPageState extends State<DashboardPage> {
   // Notification State
   StreamSubscription? _notificationSubscription;
 
+  /// Cards contributed by installed remote widgets.
+  List<BentoGridItem> _remoteItems = [];
+  StreamSubscription? _installedWidgetsSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +74,11 @@ class _DashboardPageState extends State<DashboardPage> {
     NotificationManager().initialize();
     _loadLayout();
     _fetchTodaysInterviews();
+    _loadRemoteWidgets();
+
+    _installedWidgetsSubscription = InstalledWidgetsStore.onChanged.listen((_) {
+      if (mounted) _loadRemoteWidgets();
+    });
 
     // Subscribe to global updates
     _interviewSubscription = InterviewService.onInterviewsUpdated.listen((_) {
@@ -89,6 +101,7 @@ class _DashboardPageState extends State<DashboardPage> {
   void dispose() {
     _interviewSubscription?.cancel();
     _notificationSubscription?.cancel();
+    _installedWidgetsSubscription?.cancel();
     super.dispose();
   }
 
@@ -167,6 +180,48 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _handleLayoutChanged(List<BentoGridLayoutItem> layout) {
     _layoutState = layout;
+  }
+
+  /// Builds a grid card for each installed remote widget.
+  ///
+  /// Manifests are read from the on-device cache rather than the network, so
+  /// the dashboard renders immediately and offline; the store is what
+  /// refreshes them.
+  Future<void> _loadRemoteWidgets() async {
+    final ids = await InstalledWidgetsStore.installedIds();
+    final items = <BentoGridItem>[];
+
+    for (final id in ids) {
+      final manifest = await WidgetRegistryService.cachedManifest(id);
+      if (manifest == null || !manifest.isSupported) continue;
+
+      final config = await InstalledWidgetsStore.config(id);
+      final layout = manifest.layout;
+
+      items.add(
+        BentoGridItem(
+          // Namespaced so a widget can never collide with a built-in card.
+          id: 'widget:$id',
+          columnSpan: layout.span,
+          minSpan: layout.minSpan,
+          maxSpan: layout.maxSpan,
+          height: layout.height,
+          minHeight: layout.minHeight,
+          maxHeight: layout.maxHeight,
+          card: RemoteWidgetCard(
+            key: ValueKey('remote-$id-${manifest.version}'),
+            manifest: manifest,
+            config: config,
+          ),
+        ),
+      );
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _remoteItems = items;
+      _layoutVersion++;
+    });
   }
 
   List<BentoGridItem> _defaultItems() {
@@ -317,6 +372,10 @@ class _DashboardPageState extends State<DashboardPage> {
           ],
         ),
       ),
+
+      // Installed remote widgets. They flow through the same layout
+      // persistence as built-in cards, so order and size survive a restart.
+      ..._remoteItems,
     ];
   }
 

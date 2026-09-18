@@ -71,9 +71,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     ],
                   ),
                   InkWell(
-                    onTap: () {
-                      // TODO: Settings page
-                    },
+                    onTap: () => Navigator.of(context).pushNamed('/settings'),
                     borderRadius: BorderRadius.circular(20),
                     child: Container(
                       padding: const EdgeInsets.all(8),

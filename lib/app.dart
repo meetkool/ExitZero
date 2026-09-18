@@ -5,6 +5,8 @@ import 'theme/app_theme.dart';
 import 'pages/splash_page.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/profile_page.dart';
+import 'pages/settings_page.dart';
+import 'pages/widget_store_page.dart';
 import 'pages/schedule_mock_page.dart';
 import 'pages/alarm_page.dart';
 
@@ -59,6 +61,8 @@ class _ExitZeroAppState extends State<ExitZeroApp> {
         '/': (context) => const SplashPage(),
         '/dashboard': (context) => const DashboardPage(),
         '/profile': (context) => const ProfilePage(),
+        '/settings': (context) => const SettingsPage(),
+        '/widgets': (context) => const WidgetStorePage(),
         '/schedule-mock': (context) => const ScheduleMockPage(),
       },
     );
