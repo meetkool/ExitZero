@@ -2,7 +2,8 @@ name: Build & Release APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -45,7 +46,13 @@ jobs:
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION-build.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "tag=v$VERSION-build.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=v$VERSION-$GITHUB_REF_NAME.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
 
       # ── Rename APK with version ──
       - name: Rename APK
@@ -59,8 +66,9 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: "ExitZero ${{ steps.version.outputs.tag }}"
+          prerelease: ${{ steps.version.outputs.prerelease }}
           body: |
-            🚀 **Automated release from `main` branch**
+            🚀 **Automated release from `${{ github.ref_name }}`**
 
             **Commit:** ${{ github.sha }}
             **Build:** #${{ github.run_number }}
