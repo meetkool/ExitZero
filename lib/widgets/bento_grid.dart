@@ -547,6 +547,20 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
     _startDrag(i, d.globalPosition);
   }
 
+  void _bodyDragStart(int i, DragStartDetails d) {
+    _startDrag(i, d.globalPosition);
+  }
+
+  /// A horizontal recognizer reports only the x component in `delta`, so the
+  /// movement is recomputed from the global position — otherwise a card
+  /// picked up by swiping sideways could never be moved up or down.
+  void _bodyDragUpdate(DragUpdateDetails d) {
+    if (_dragIdx == null) return;
+    final delta = d.globalPosition - _lastGlobal;
+    _lastGlobal = d.globalPosition;
+    _dragUpdateWithDelta(delta);
+  }
+
   /// Releases any interaction still believed to be in progress.
   ///
   /// Called on every raw pointer-up, so the grid cannot stay latched into a
@@ -906,6 +920,8 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
     // Block the card's own buttons while arranging.
     if (_editMode) inner = AbsorbPointer(child: inner);
 
+    final double handleBox = _handleBox(cardW, cardH);
+
     Widget c = inner;
 
     // Card plus its chrome. Keeping the handles in here — inside the
@@ -935,8 +951,8 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
             Positioned.fill(
               child: IgnorePointer(child: Center(child: _sizeChip(i))),
             ),
-          ..._buildResizeHandles(i, item, cardW, cardH),
-          _grip(i),
+          ..._buildResizeHandles(i, item, handleBox),
+          _grip(i, _hasHandles(i, item) ? handleBox : 8.0),
         ],
       );
     }
@@ -1016,6 +1032,17 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
       onDoubleTap: _editMode && item.minSpan != item.maxSpan
           ? () => _toggleSpan(i)
           : null,
+      // A third way to pick a card up: swipe it sideways from anywhere on the
+      // card. Vertical is spoken for by the scroll view, but horizontal is
+      // free in edit mode, so this costs nothing and means you do not have to
+      // find the grip or wait out a long press.
+      //
+      // Only in edit mode: outside it, a card-wide horizontal recognizer
+      // would fight the interviews carousel for its swipes.
+      onHorizontalDragStart: _editMode ? (d) => _bodyDragStart(i, d) : null,
+      onHorizontalDragUpdate: _editMode ? _bodyDragUpdate : null,
+      onHorizontalDragEnd: _editMode ? _dragEnd : null,
+      onHorizontalDragCancel: _editMode ? _longPressCancel : null,
       child: c,
     );
 
@@ -1050,53 +1077,51 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
 
   /// The move handle. A labelled grip reads as "pull me" in a way that corner
   /// dots — which look like rivets in this card style — never did.
-  Widget _grip(int i) {
+  /// The move handle: a full-width strip across the top of the card.
+  ///
+  /// The whole strip is the target, not just the pill drawn in it — the pill
+  /// alone was a 76px sliver and far too easy to miss. It insets by the
+  /// corner-handle size so it never competes with a resize dot.
+  Widget _grip(int i, double inset) {
     return Positioned(
-      top: 4,
-      left: 0,
-      right: 0,
-      height: 40,
-      child: Center(
-        child: RawGestureDetector(
-          behavior: HitTestBehavior.opaque,
-          gestures: {
-            _EagerPanRecognizer:
-                GestureRecognizerFactoryWithHandlers<_EagerPanRecognizer>(
-                  () => _EagerPanRecognizer(debugOwner: this),
-                  (r) {
-                    r.onStart = (d) => _dragStart(i, d);
-                    r.onUpdate = _dragUpdate;
-                    r.onEnd = _dragEnd;
-                    // Not `_dragIdx == i`: reordering reassigns _dragIdx as
-                    // the card travels, so comparing against the captured
-                    // index would skip cleanup and leave the card stuck
-                    // lifted with the auto-scroll timer still running.
-                    r.onCancel = () {
-                      if (_dragIdx != null) _dragFinish();
-                    };
-                  },
-                ),
-          },
+      top: 0,
+      left: inset,
+      right: inset,
+      height: 46,
+      child: RawGestureDetector(
+        behavior: HitTestBehavior.opaque,
+        gestures: {
+          _EagerPanRecognizer:
+              GestureRecognizerFactoryWithHandlers<_EagerPanRecognizer>(
+                () => _EagerPanRecognizer(debugOwner: this),
+                (r) {
+                  r.onStart = (d) => _dragStart(i, d);
+                  r.onUpdate = _dragUpdate;
+                  r.onEnd = _dragEnd;
+                  // Not `_dragIdx == i`: reordering reassigns _dragIdx as the
+                  // card travels, so comparing against the captured index
+                  // would skip cleanup and leave the card stuck lifted with
+                  // the auto-scroll timer still running.
+                  r.onCancel = () {
+                    if (_dragIdx != null) _dragFinish();
+                  };
+                },
+              ),
+        },
+        child: Center(
           child: Container(
-            width: 76,
-            height: 40,
+            width: 64,
+            height: 28,
             alignment: Alignment.center,
-            child: Container(
-              width: 54,
-              height: 26,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(13),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.32),
-                ),
-              ),
-              child: Icon(
-                Icons.drag_handle,
-                size: 16,
-                color: Colors.white.withValues(alpha: 0.9),
-              ),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.22),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.38)),
+            ),
+            child: Icon(
+              Icons.drag_handle,
+              size: 17,
+              color: Colors.white.withValues(alpha: 0.95),
             ),
           ),
         ),
@@ -1104,32 +1129,26 @@ class _BentoGridState extends State<BentoGrid> with TickerProviderStateMixin {
     );
   }
 
-  List<Widget> _buildResizeHandles(
-    int i,
-    _Item item,
-    double cardW,
-    double cardH,
-  ) {
-    if (!item.resizable) return const [];
+  /// Whether this card shows resize corners at all.
+  bool _hasHandles(int i, _Item item) {
+    if (!item.resizable) return false;
     // The card in hand is being moved, not resized.
-    if (_dragIdx == i) return const [];
+    if (_dragIdx == i) return false;
+    return item.minSpan != item.maxSpan || item.minHeight != item.maxHeight;
+  }
 
-    final allowHorizontal = item.minSpan != item.maxSpan;
-    final allowVertical = item.minHeight != item.maxHeight;
-    if (!allowHorizontal && !allowVertical) return const [];
+  /// Corner target size: 48dp where the card is big enough, shrinking only
+  /// when the top and bottom pair would otherwise collide.
+  double _handleBox(double cardW, double cardH) =>
+      min(48.0, min(cardH * 0.45, cardW * 0.45)).clamp(32.0, 48.0);
+
+  List<Widget> _buildResizeHandles(int i, _Item item, double box) {
+    if (!_hasHandles(i, item)) return const [];
 
     // Corners only. Eight handles on a 90px card meant the edge and corner
     // targets physically overlapped, so which one you got was pot luck. Four
     // corners cover both axes on their own — the width and height clamps in
     // _resUpdate pin whichever axis this card does not allow.
-    //
-    // Aim for a 48dp target, shrinking only when the card is too small to
-    // hold four of them without the top and bottom pair colliding.
-    final double box = min(
-      48.0,
-      min(cardH * 0.45, cardW * 0.45),
-    ).clamp(32.0, 48.0);
-
     return [
       _cornerHandle(i, _ResizeHandle.topLeft, box, top: 0, left: 0),
       _cornerHandle(i, _ResizeHandle.topRight, box, top: 0, right: 0),
