@@ -108,8 +108,53 @@ class RemoteWidgetRenderer {
             ? const Spacer()
             : SizedBox(height: _dbl(node['size'], 8));
       default:
-        return null;
+        // A component this build does not know about. Say so instead of
+        // drawing nothing: a silently blank card is indistinguishable from a
+        // broken one, and the usual cause is simply an app older than the
+        // widget.
+        return _unsupported(type);
     }
+  }
+
+  /// Shown in place of a component this build cannot draw.
+  static Widget _unsupported(String type) {
+    // Deliberately not Expanded: a body with a single component returns this
+    // straight out of buildBody, with no Flex above it, and Expanded outside
+    // a Flex throws.
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.system_update,
+              size: 18,
+              color: Colors.white.withValues(alpha: 0.35),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Update the app to see this',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              type.isEmpty ? 'unknown component' : '"$type" not supported',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.white.withValues(alpha: 0.3),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// A small figure jogging a circular track, drawn in perspective.
