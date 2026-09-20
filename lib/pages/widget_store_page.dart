@@ -43,6 +43,28 @@ class _WidgetStorePageState extends State<WidgetStorePage> {
     final installed = await InstalledWidgetsStore.installedIds();
     final hidden = await InstalledWidgetsStore.hiddenBuiltIns();
 
+    // Pull fresh manifests for everything already installed.
+    //
+    // Without this an installed widget was frozen at whatever it looked like
+    // on the day it was added: the dashboard reads manifests from the cache,
+    // and only installing wrote to that cache. Publishing a fix to a widget
+    // someone already had therefore never reached them, which defeats the
+    // point of the inventory.
+    if (force && installed.isNotEmpty) {
+      final byId = {for (final e in entries) e.id: e};
+      var changed = false;
+      for (final id in installed) {
+        final entry = byId[id];
+        if (entry == null) continue;
+        final fresh = await WidgetRegistryService.fetchManifest(
+          entry,
+          forceRefresh: true,
+        );
+        if (fresh != null) changed = true;
+      }
+      if (changed) InstalledWidgetsStore.notifyChanged();
+    }
+
     if (!mounted) return;
     setState(() {
       _entries = entries;

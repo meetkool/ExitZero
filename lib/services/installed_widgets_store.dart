@@ -21,6 +21,10 @@ class InstalledWidgetsStore {
       StreamController<void>.broadcast();
   static Stream<void> get onChanged => _changes.stream;
 
+  /// Tell listeners something about the installed set changed, when the
+  /// change was not an install or uninstall — a refreshed manifest, say.
+  static void notifyChanged() => _changes.add(null);
+
   static Future<List<String>> installedIds() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getStringList(_installedKey) ?? const [];
