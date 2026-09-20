@@ -12,15 +12,54 @@ class MainActivity : FlutterActivity() {
 
     private val channelName = "exitzero/camera_capability"
 
+    private var dualCamera: DualCamera? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        val dual = DualCamera(applicationContext, flutterEngine.renderer)
+        dualCamera = dual
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "concurrentSupport" -> result.success(concurrentSupport())
+
+                    "dualStart" -> dual.start { info, error ->
+                        // Camera2 answers on a background thread; platform
+                        // channel replies have to go back on the main one.
+                        runOnUiThread {
+                            if (error != null) {
+                                result.error("dual_failed", error, null)
+                            } else {
+                                result.success(info)
+                            }
+                        }
+                    }
+
+                    "dualStop" -> {
+                        dual.stop()
+                        result.success(true)
+                    }
+
+                    "dualRunning" -> result.success(dual.isRunning())
+
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    override fun onPause() {
+        // Two open cameras is a lot to hold. Hand them back when the app is
+        // not in front; Android would take them anyway.
+        dualCamera?.stop()
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        dualCamera?.stop()
+        dualCamera = null
+        super.onDestroy()
     }
 
     /**
