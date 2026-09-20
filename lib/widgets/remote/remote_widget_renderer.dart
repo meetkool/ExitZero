@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
+import 'avatar_3d.dart';
 import 'widget_dsl.dart';
 
 /// Turns a manifest's `body` into widgets.
@@ -92,6 +93,8 @@ class RemoteWidgetRenderer {
         return _column(node, ctx, accent);
       case 'list':
         return _list(node, ctx, accent);
+      case 'avatar3d':
+        return _avatar3d(node, accent);
       case 'divider':
         return Divider(
           height: _dbl(node['height'], 17),
@@ -104,6 +107,19 @@ class RemoteWidgetRenderer {
       default:
         return null;
     }
+  }
+
+  /// A small figure jogging a circular track, drawn in perspective.
+  ///
+  /// Projection maths in a painter rather than a 3D package: no dependency,
+  /// no model file to fetch, and cheap enough to sit in the grid.
+  static Widget _avatar3d(Map<String, dynamic> n, Color accent) {
+    return Avatar3D(
+      color: WidgetColors.resolve(n['color'], fallback: accent),
+      height: _dbl(n['size'], 120),
+      secondsPerLap: _dbl(n['secondsPerLap'], 6),
+      showTrack: n['showTrack'] != false,
+    );
   }
 
   // ── leaves ─────────────────────────────────────────────────────────────────
