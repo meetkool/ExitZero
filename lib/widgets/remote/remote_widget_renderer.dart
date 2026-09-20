@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import 'avatar_3d.dart';
+import 'camera_capability_card.dart';
 import 'camera_feed.dart';
 import 'globe_3d.dart';
 import 'widget_dsl.dart';
@@ -101,6 +102,14 @@ class RemoteWidgetRenderer {
         return _globe3d(node, ctx, accent);
       case 'cameraFeed':
         return _cameraFeed(node, ctx, accent);
+      case 'cameraCapability':
+        return CameraCapabilityCard(
+          color: WidgetColors.resolve(node['color'], fallback: accent),
+          height: _numeric(
+            WidgetExpression.resolveValue(node['size'], ctx),
+            150,
+          ),
+        );
       case 'divider':
         return Divider(
           height: _dbl(node['height'], 17),
