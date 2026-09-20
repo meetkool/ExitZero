@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import 'avatar_3d.dart';
+import 'globe_3d.dart';
 import 'widget_dsl.dart';
 
 /// Turns a manifest's `body` into widgets.
@@ -95,6 +96,8 @@ class RemoteWidgetRenderer {
         return _list(node, ctx, accent);
       case 'avatar3d':
         return _avatar3d(node, ctx, accent);
+      case 'globe3d':
+        return _globe3d(node, ctx, accent);
       case 'divider':
         return Divider(
           height: _dbl(node['height'], 17),
@@ -130,6 +133,51 @@ class RemoteWidgetRenderer {
       ),
       showTrack: n['showTrack'] != false,
     );
+  }
+
+  /// A turning wireframe world, optionally with pins on it.
+  static Widget _globe3d(
+    Map<String, dynamic> n,
+    WidgetBindingContext ctx,
+    Color accent,
+  ) {
+    return Globe3D(
+      color: WidgetColors.resolve(n['color'], fallback: accent),
+      height: _numeric(WidgetExpression.resolveValue(n['size'], ctx), 150),
+      secondsPerSpin: _numeric(
+        WidgetExpression.resolveValue(n['secondsPerSpin'], ctx),
+        14,
+      ),
+      markers: _markers(n['markers'], ctx),
+      showAtmosphere: n['showAtmosphere'] != false,
+      showSatellite: n['showSatellite'] != false,
+    );
+  }
+
+  /// Pins come either as a literal list in the manifest or bound from data,
+  /// so each coordinate is resolved rather than read straight off the map.
+  static List<GlobeMarker> _markers(dynamic raw, WidgetBindingContext ctx) {
+    final list = raw is List
+        ? raw
+        : WidgetExpression.resolveList(raw, ctx);
+    final out = <GlobeMarker>[];
+    for (final e in list) {
+      if (e is! Map) continue;
+      final lat = _numeric(
+        WidgetExpression.resolveValue(e['lat'], ctx),
+        double.nan,
+      );
+      final lon = _numeric(
+        WidgetExpression.resolveValue(e['lon'], ctx),
+        double.nan,
+      );
+      // Skip anything that did not resolve to a usable coordinate rather
+      // than dropping a pin at (0, 0) in the Atlantic.
+      if (lat.isNaN || lon.isNaN) continue;
+      if (lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+      out.add(GlobeMarker(lat, lon));
+    }
+    return out;
   }
 
   /// Accepts a number or a numeric string, since a bound value may be either.
