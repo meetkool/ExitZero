@@ -94,7 +94,7 @@ class RemoteWidgetRenderer {
       case 'list':
         return _list(node, ctx, accent);
       case 'avatar3d':
-        return _avatar3d(node, accent);
+        return _avatar3d(node, ctx, accent);
       case 'divider':
         return Divider(
           height: _dbl(node['height'], 17),
@@ -113,13 +113,30 @@ class RemoteWidgetRenderer {
   ///
   /// Projection maths in a painter rather than a 3D package: no dependency,
   /// no model file to fetch, and cheap enough to sit in the grid.
-  static Widget _avatar3d(Map<String, dynamic> n, Color accent) {
+  static Widget _avatar3d(
+    Map<String, dynamic> n,
+    WidgetBindingContext ctx,
+    Color accent,
+  ) {
+    // These go through the binding engine so a manifest can drive them from
+    // config. Config values arrive as strings, which _dbl alone would reject
+    // and silently replace with its fallback.
     return Avatar3D(
       color: WidgetColors.resolve(n['color'], fallback: accent),
-      height: _dbl(n['size'], 120),
-      secondsPerLap: _dbl(n['secondsPerLap'], 6),
+      height: _numeric(WidgetExpression.resolveValue(n['size'], ctx), 120),
+      secondsPerLap: _numeric(
+        WidgetExpression.resolveValue(n['secondsPerLap'], ctx),
+        6,
+      ),
       showTrack: n['showTrack'] != false,
     );
+  }
+
+  /// Accepts a number or a numeric string, since a bound value may be either.
+  static double _numeric(dynamic v, double fallback) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v.trim()) ?? fallback;
+    return fallback;
   }
 
   // ── leaves ─────────────────────────────────────────────────────────────────
