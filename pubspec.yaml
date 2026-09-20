@@ -49,6 +49,10 @@ dependencies:
   alarm: ^5.2.1
   auto_start_flutter: ^0.7.0
   permission_handler: ^12.0.1
+  # Range rather than a caret pin: CI resolves against whatever Flutter
+  # stable ships, and this lets pub take 0.12.x where the SDK allows it and
+  # fall back to 0.11.x where it does not, instead of failing to resolve.
+  camera: '>=0.11.0 <0.13.0'
 
 dev_dependencies:
   flutter_test:

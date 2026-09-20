@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import 'avatar_3d.dart';
+import 'camera_feed.dart';
 import 'globe_3d.dart';
 import 'widget_dsl.dart';
 
@@ -98,6 +99,8 @@ class RemoteWidgetRenderer {
         return _avatar3d(node, ctx, accent);
       case 'globe3d':
         return _globe3d(node, ctx, accent);
+      case 'cameraFeed':
+        return _cameraFeed(node, ctx, accent);
       case 'divider':
         return Divider(
           height: _dbl(node['height'], 17),
@@ -196,6 +199,29 @@ class RemoteWidgetRenderer {
       markers: _markers(n['markers'], ctx),
       showAtmosphere: n['showAtmosphere'] != false,
       showSatellite: n['showSatellite'] != false,
+    );
+  }
+
+  /// A live camera preview, front or back.
+  ///
+  /// The manifest only gets to ask for a preview and say which lens to open
+  /// first. Capturing, saving and uploading are not offered at all — a
+  /// component that could photograph and post in one step is the shape of a
+  /// spyware widget, whoever wrote the manifest.
+  static Widget _cameraFeed(
+    Map<String, dynamic> n,
+    WidgetBindingContext ctx,
+    Color accent,
+  ) {
+    final facing = WidgetExpression.resolve(
+      (n['facing'] ?? 'back').toString(),
+      ctx,
+    ).trim().toLowerCase();
+
+    return CameraFeed(
+      color: WidgetColors.resolve(n['color'], fallback: accent),
+      height: _numeric(WidgetExpression.resolveValue(n['size'], ctx), 220),
+      startWithFront: facing == 'front',
     );
   }
 
