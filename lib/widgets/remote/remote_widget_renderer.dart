@@ -110,6 +110,18 @@ class RemoteWidgetRenderer {
             WidgetExpression.resolveValue(node['size'], ctx),
             260,
           ),
+          // Rotation lives in the manifest so a device that needs different
+          // numbers is a push, not a rebuild.
+          backRotation: _numeric(
+            WidgetExpression.resolveValue(node['backRotation'], ctx),
+            90,
+          ).round(),
+          frontRotation: _numeric(
+            WidgetExpression.resolveValue(node['frontRotation'], ctx),
+            270,
+          ).round(),
+          mirrorFront: node['mirrorFront'] == true,
+          debug: node['debug'] == true,
         );
       case 'cameraCapability':
         return CameraCapabilityCard(

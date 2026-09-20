@@ -14,10 +14,30 @@ class DualCameraFeed extends StatefulWidget {
   final Color color;
   final double height;
 
+  /// Clockwise degrees needed to stand each preview upright.
+  ///
+  /// The sensor orientation a device reports does not, on its own, say which
+  /// way its texture ends up on screen, and the two lenses here need turning
+  /// opposite ways. These are measured values with manifest overrides, so a
+  /// phone that needs different numbers is a push rather than a new build.
+  final int backRotation;
+  final int frontRotation;
+
+  /// Mirror the front pane, the way a selfie camera usually reads.
+  final bool mirrorFront;
+
+  /// Print each lens's reported sensor orientation on its badge, for working
+  /// out the right numbers on a device that disagrees.
+  final bool debug;
+
   const DualCameraFeed({
     super.key,
     required this.color,
     this.height = 260,
+    this.backRotation = 90,
+    this.frontRotation = 270,
+    this.mirrorFront = false,
+    this.debug = false,
   });
 
   @override
@@ -274,24 +294,42 @@ class _DualCameraFeedState extends State<DualCameraFeed>
     );
   }
 
+  /// Quarter turns for this lens, from the configured degrees.
+  int _turnsFor(DualCameraFeedInfo feed) {
+    final degrees = feed.isFront ? widget.frontRotation : widget.backRotation;
+    // Normalise first: a negative or over-wound value should still land on
+    // one of the four positions rather than throwing off the layout.
+    return ((degrees % 360 + 360) % 360) ~/ 90;
+  }
+
   Widget _pane(DualCameraFeedInfo feed) {
+    Widget video = RotatedBox(
+      quarterTurns: _turnsFor(feed),
+      child: SizedBox(
+        width: feed.width.toDouble(),
+        height: feed.height.toDouble(),
+        child: Texture(textureId: feed.textureId),
+      ),
+    );
+
+    if (widget.mirrorFront && feed.isFront) {
+      video = Transform(
+        alignment: Alignment.center,
+        transform: Matrix4.identity()..scale(-1.0, 1.0, 1.0),
+        child: video,
+      );
+    }
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        // The texture arrives in sensor orientation, which on a portrait phone
-        // is a quarter turn out. Rotate it upright, then cover the pane.
+        // The texture arrives in the sensor's own orientation, so it is turned
+        // upright here, then scaled to cover the pane.
         ClipRect(
           child: FittedBox(
             fit: BoxFit.cover,
             clipBehavior: Clip.hardEdge,
-            child: RotatedBox(
-              quarterTurns: feed.quarterTurns,
-              child: SizedBox(
-                width: feed.width.toDouble(),
-                height: feed.height.toDouble(),
-                child: Texture(textureId: feed.textureId),
-              ),
-            ),
+            child: video,
           ),
         ),
         Positioned(
@@ -316,7 +354,11 @@ class _DualCameraFeedState extends State<DualCameraFeed>
                 ),
                 const SizedBox(width: 5),
                 Text(
-                  feed.lens.toUpperCase(),
+                  widget.debug
+                      ? '${feed.lens.toUpperCase()}  '
+                            'sensor ${feed.sensorOrientation}°  '
+                            'shown ${_turnsFor(feed) * 90}°'
+                      : feed.lens.toUpperCase(),
                   style: const TextStyle(
                     fontSize: 8.5,
                     fontWeight: FontWeight.bold,
