@@ -1,12 +1,15 @@
-import 'dart:typed_data';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import '../../services/device_media.dart';
+import '../../services/music_controller.dart';
+import '../../services/music_session.dart';
 
 /// A player for the music already on the phone.
 ///
 /// Album art fills the card with the controls laid over it, and the title
 /// opens a sheet listing every track the media store knows about.
+///
+/// The card is only the face of it: playback lives in [MusicController], so
+/// the same session is driven from here and from the notification shade.
 class MusicPlayerCard extends StatefulWidget {
   final double height;
   final Color accent;
@@ -22,112 +25,33 @@ class MusicPlayerCard extends StatefulWidget {
 }
 
 class _MusicPlayerCardState extends State<MusicPlayerCard> {
-  final AudioPlayer _player = AudioPlayer();
-
-  List<DeviceTrack> _tracks = const [];
-  int _index = -1;
-  Uint8List? _art;
-
-  bool _loading = true;
-  bool _playing = false;
-  bool _denied = false;
-  bool _shuffle = false;
-  Duration _position = Duration.zero;
-  Duration _length = Duration.zero;
+  final MusicController _music = MusicController.instance;
 
   @override
   void initState() {
     super.initState();
-    _player.onPlayerStateChanged.listen((s) {
-      if (mounted) setState(() => _playing = s == PlayerState.playing);
-    });
-    _player.onPositionChanged.listen((p) {
-      if (mounted) setState(() => _position = p);
-    });
-    _player.onDurationChanged.listen((d) {
-      if (mounted) setState(() => _length = d);
-    });
-    _player.onPlayerComplete.listen((_) => _skip(1));
-    _load();
+    _music.addListener(_onChange);
+    _music.load();
+    // Best effort: a device that refuses a media session still gets a card.
+    MusicSession.start();
   }
 
   @override
   void dispose() {
-    _player.dispose();
+    // Deliberately not stopping the player: the notification outlives this
+    // widget, and killing playback on a scroll rebuild would be surprising.
+    _music.removeListener(_onChange);
     super.dispose();
   }
 
-  Future<void> _load() async {
-    final tracks = await DeviceMediaService.tracks();
-    if (!mounted) return;
-    setState(() {
-      _tracks = tracks;
-      _loading = false;
-      _denied = tracks.isEmpty;
-      if (tracks.isNotEmpty && _index < 0) _index = 0;
-    });
-    if (tracks.isNotEmpty) _loadArt();
+  void _onChange() {
+    if (mounted) setState(() {});
   }
 
-  Future<void> _loadArt() async {
-    if (_index < 0 || _index >= _tracks.length) return;
-    final bytes = await DeviceMediaService.art(_tracks[_index]);
-    if (!mounted) return;
-    setState(() => _art = bytes);
-  }
-
-  DeviceTrack? get _current =>
-      (_index >= 0 && _index < _tracks.length) ? _tracks[_index] : null;
-
-  Future<void> _playCurrent() async {
-    final track = _current;
-    if (track == null) return;
-    // A real file where scoped storage still exposes one, the content uri
-    // otherwise; DeviceFileSource cannot open a content:// path.
-    await _player.play(
-      track.isFile
-          ? DeviceFileSource(track.playable)
-          : UrlSource(track.playable),
-    );
-  }
-
-  Future<void> _toggle() async {
-    if (_current == null) return;
-    if (_playing) {
-      await _player.pause();
-    } else if (_position > Duration.zero) {
-      await _player.resume();
-    } else {
-      await _playCurrent();
-    }
-  }
-
-  Future<void> _skip(int delta) async {
-    if (_tracks.isEmpty) return;
-    final next = _shuffle
-        ? (DateTime.now().microsecondsSinceEpoch % _tracks.length)
-        : (_index + delta) % _tracks.length;
-    setState(() {
-      _index = next < 0 ? _tracks.length - 1 : next;
-      _position = Duration.zero;
-      _art = null;
-    });
-    await _loadArt();
-    await _playCurrent();
-  }
-
-  Future<void> _choose(int i) async {
-    setState(() {
-      _index = i;
-      _position = Duration.zero;
-      _art = null;
-    });
-    await _loadArt();
-    await _playCurrent();
-  }
+  DeviceTrack? get _current => _music.current;
 
   void _openList() {
-    if (_tracks.isEmpty) return;
+    if (_music.tracks.isEmpty) return;
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFF12161A),
@@ -136,6 +60,7 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
       builder: (sheet) {
+        final tracks = _music.tracks;
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -164,7 +89,7 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
                     ),
                     const Spacer(),
                     Text(
-                      '${_tracks.length}',
+                      '${tracks.length}',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.white.withValues(alpha: 0.4),
@@ -177,10 +102,10 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
-                  itemCount: _tracks.length,
+                  itemCount: tracks.length,
                   itemBuilder: (context, i) {
-                    final t = _tracks[i];
-                    final selected = i == _index;
+                    final t = tracks[i];
+                    final selected = i == _music.index;
                     return ListTile(
                       dense: true,
                       leading: Icon(
@@ -219,7 +144,7 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
                       ),
                       onTap: () {
                         Navigator.of(sheet).pop();
-                        _choose(i);
+                        _music.choose(i);
                       },
                     );
                   },
@@ -249,7 +174,7 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
           fit: StackFit.expand,
           children: [
             _backdrop(),
-            if (_loading)
+            if (_music.loading)
               Center(
                 child: SizedBox(
                   width: 20,
@@ -261,7 +186,7 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
                   ),
                 ),
               )
-            else if (_denied)
+            else if (_music.denied)
               _empty()
             else
               _controls(),
@@ -272,7 +197,7 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
   }
 
   Widget _backdrop() {
-    final art = _art;
+    final art = _music.art;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -341,10 +266,7 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
             ),
             const SizedBox(height: 10),
             TextButton(
-              onPressed: () {
-                setState(() => _loading = true);
-                _load();
-              },
+              onPressed: () => _music.load(force: true),
               child: Text(
                 'Try again',
                 style: TextStyle(fontSize: 12, color: widget.accent),
@@ -434,7 +356,7 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
               const SizedBox(width: 10),
               // The big rounded play button from the reference.
               GestureDetector(
-                onTap: _toggle,
+                onTap: _music.toggle,
                 child: Container(
                   width: 62,
                   height: 42,
@@ -443,7 +365,7 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
                     borderRadius: BorderRadius.circular(13),
                   ),
                   child: Icon(
-                    _playing ? Icons.pause : Icons.play_arrow,
+                    _music.playing ? Icons.pause : Icons.play_arrow,
                     size: 25,
                     color: Colors.black.withValues(alpha: 0.75),
                   ),
@@ -458,17 +380,28 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
             children: [
               _iconButton(
                 Icons.shuffle,
-                active: _shuffle,
-                onTap: () => setState(() => _shuffle = !_shuffle),
+                active: _music.shuffle,
+                onTap: _music.toggleShuffle,
               ),
-              _iconButton(Icons.thumb_up_alt_outlined, onTap: () {}),
-              _iconButton(Icons.skip_previous, onTap: () => _skip(-1)),
+              _repeatButton(),
+              _iconButton(Icons.skip_previous, onTap: () => _music.skip(-1)),
               Expanded(child: _seekBar()),
-              _iconButton(Icons.skip_next, onTap: () => _skip(1)),
+              _iconButton(Icons.skip_next, onTap: () => _music.skip(1)),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  /// off → repeat all → repeat one, shown the way every player shows it: the
+  /// icon gains a "1" on the last step rather than changing colour twice.
+  Widget _repeatButton() {
+    final mode = _music.repeat;
+    return _iconButton(
+      mode == RepeatMode.one ? Icons.repeat_one : Icons.repeat,
+      active: mode != RepeatMode.off,
+      onTap: _music.cycleRepeat,
     );
   }
 
@@ -492,8 +425,8 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
   }
 
   Widget _seekBar() {
-    final total = _length.inMilliseconds;
-    final at = _position.inMilliseconds;
+    final total = _music.length.inMilliseconds;
+    final at = _music.position.inMilliseconds;
     final progress = total <= 0 ? 0.0 : (at / total).clamp(0.0, 1.0);
 
     return LayoutBuilder(
@@ -503,7 +436,7 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
           onTapDown: (d) {
             if (total <= 0) return;
             final fraction = (d.localPosition.dx / box.maxWidth).clamp(0.0, 1.0);
-            _player.seek(Duration(milliseconds: (total * fraction).round()));
+            _music.seek(Duration(milliseconds: (total * fraction).round()));
           },
           child: SizedBox(
             height: 22,

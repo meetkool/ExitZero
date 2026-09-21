@@ -54,6 +54,13 @@ dependencies:
   # fall back to 0.11.x where it does not, instead of failing to resolve.
   camera: '>=0.11.0 <0.13.0'
   audioplayers: ^6.8.1
+  # Media-session controls in the notification shade and on the lock screen.
+  # Player-agnostic: it drives the same audioplayers instance the card uses,
+  # rather than replacing it. Range for the same reason as camera above.
+  audio_service: '>=0.18.0 <0.20.0'
+  # Artwork has to reach the media session as a file URI, so the bytes get
+  # staged in the cache directory. Already present transitively.
+  path_provider: ^2.1.0
 
 dev_dependencies:
   flutter_test:

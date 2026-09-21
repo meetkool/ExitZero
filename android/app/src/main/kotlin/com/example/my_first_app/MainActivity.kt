@@ -4,11 +4,17 @@ import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.os.Build
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+/**
+ * Extends AudioServiceActivity rather than FlutterActivity so the playback
+ * service and the UI share one Flutter engine. Without that the notification's
+ * buttons would reach a second, headless copy of the app and the card would
+ * never hear about them.
+ */
+class MainActivity : AudioServiceActivity() {
 
     private val channelName = "exitzero/camera_capability"
 
