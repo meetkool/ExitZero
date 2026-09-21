@@ -43,6 +43,9 @@ class DualCameraService {
     'exitzero/camera_capability',
   );
 
+  /// Whether the last successful start also got the recorder its streams.
+  static bool lastStartCanRecord = false;
+
   /// Starts both cameras and returns one entry per lens.
   ///
   /// Throws a [DualCameraException] with a readable reason when the device
@@ -68,6 +71,10 @@ class DualCameraService {
       if (feeds is! List || feeds.isEmpty) {
         throw const DualCameraException('The device returned no feeds.');
       }
+
+      // Recording needs a second stream per camera, which concurrent mode
+      // does not guarantee. The native side says whether it got one.
+      lastStartCanRecord = raw?['canRecord'] == true;
 
       return feeds.whereType<Map>().map((f) {
         return DualCameraFeedInfo(
@@ -95,6 +102,122 @@ class DualCameraService {
       // Stopping is best effort; the native side also releases on pause.
     }
   }
+
+  // ── recording ──────────────────────────────────────────────────────────
+
+  /// Begins recording both lenses into one video.
+  ///
+  /// The rotations are the same ones that stand the previews upright, so a
+  /// device needing different numbers gets them from the manifest rather
+  /// than from a new build.
+  ///
+  /// Sound is asked for but never required: a refused microphone records a
+  /// silent video rather than nothing at all.
+  static Future<void> startRecording({
+    required int backRotation,
+    required int frontRotation,
+    required bool mirrorFront,
+    bool audio = true,
+  }) async {
+    if (!Platform.isAndroid) {
+      throw const DualCameraException('Recording is Android only.');
+    }
+
+    var withAudio = audio;
+    if (withAudio) {
+      try {
+        withAudio = (await Permission.microphone.request()).isGranted;
+      } catch (_) {
+        withAudio = false;
+      }
+    }
+
+    try {
+      await _channel.invokeMethod('recordStart', {
+        'backRotation': backRotation,
+        'frontRotation': frontRotation,
+        'mirrorFront': mirrorFront,
+        'audio': withAudio,
+      });
+    } on PlatformException catch (e) {
+      throw DualCameraException(e.message ?? 'Could not start recording.');
+    } on MissingPluginException {
+      throw const DualCameraException(
+        'This build of the app cannot record.',
+      );
+    }
+  }
+
+  /// Ends the recording and files it in the gallery.
+  static Future<DualRecording> stopRecording() async {
+    if (!Platform.isAndroid) {
+      throw const DualCameraException('Recording is Android only.');
+    }
+
+    try {
+      final raw =
+          await _channel.invokeMapMethod<String, dynamic>('recordStop');
+      if (raw == null || raw['ok'] != true) {
+        throw DualCameraException(
+          (raw?['error'] ?? 'The recording was not saved.').toString(),
+        );
+      }
+      return DualRecording(
+        name: (raw['name'] ?? '').toString(),
+        uri: (raw['uri'] ?? '').toString(),
+        frames: (raw['frames'] as num?)?.toInt() ?? 0,
+        withAudio: raw['withAudio'] == true,
+      );
+    } on PlatformException catch (e) {
+      throw DualCameraException(e.message ?? 'Could not stop the recording.');
+    }
+  }
+
+  /// Whether a recording is running, and how long it has been going.
+  static Future<DualRecordState> recordState() async {
+    if (!Platform.isAndroid) return const DualRecordState();
+    try {
+      final raw =
+          await _channel.invokeMapMethod<String, dynamic>('recordState');
+      return DualRecordState(
+        recording: raw?['recording'] == true,
+        canRecord: raw?['canRecord'] == true,
+        elapsed: Duration(
+          milliseconds: (raw?['elapsedMs'] as num?)?.toInt() ?? 0,
+        ),
+      );
+    } catch (_) {
+      return const DualRecordState();
+    }
+  }
+}
+
+/// A finished recording, as filed in the gallery.
+class DualRecording {
+  final String name;
+  final String uri;
+  final int frames;
+  final bool withAudio;
+
+  const DualRecording({
+    required this.name,
+    required this.uri,
+    required this.frames,
+    required this.withAudio,
+  });
+}
+
+/// What the recorder is doing right now.
+class DualRecordState {
+  final bool recording;
+  final bool canRecord;
+  final Duration elapsed;
+
+  const DualRecordState({
+    this.recording = false,
+    this.canRecord = false,
+    this.elapsed = Duration.zero,
+  });
 }
 
 class DualCameraException implements Exception {

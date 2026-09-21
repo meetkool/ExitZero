@@ -51,6 +51,49 @@ class MainActivity : AudioServiceActivity() {
 
                     "dualRunning" -> result.success(dual.isRunning())
 
+                    "recordStart" -> {
+                        // The same rotation numbers that stand the preview
+                        // upright stand the recording upright, so they come
+                        // from the manifest rather than being guessed here.
+                        dual.recorder.backRotation =
+                            call.argument<Int>("backRotation") ?: 0
+                        dual.recorder.frontRotation =
+                            call.argument<Int>("frontRotation") ?: 0
+                        dual.recorder.mirrorFront =
+                            call.argument<Boolean>("mirrorFront") ?: false
+
+                        if (!dual.canRecord()) {
+                            result.error(
+                                "record_unavailable",
+                                "This device would not give the recorder a " +
+                                    "second camera stream.",
+                                null,
+                            )
+                        } else {
+                            val error = dual.recorder.start(
+                                call.argument<Boolean>("audio") ?: true,
+                            )
+                            if (error != null) {
+                                result.error("record_failed", error, null)
+                            } else {
+                                result.success(true)
+                            }
+                        }
+                    }
+
+                    "recordStop" -> dual.recorder.stop { info ->
+                        // The recorder answers on its GL thread.
+                        runOnUiThread { result.success(info) }
+                    }
+
+                    "recordState" -> result.success(
+                        mapOf(
+                            "recording" to dual.recorder.isRecording(),
+                            "canRecord" to dual.canRecord(),
+                            "elapsedMs" to dual.recorder.elapsedMillis(),
+                        ),
+                    )
+
                     "nextAlarm" -> result.success(media.nextAlarm())
 
                     "audioTracks" -> result.success(

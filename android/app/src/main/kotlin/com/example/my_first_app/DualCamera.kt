@@ -44,6 +44,9 @@ class DualCamera(
         var device: CameraDevice? = null
         var session: CameraCaptureSession? = null
         var surface: Surface? = null
+
+        /** The recorder's second stream, when the device will give us one. */
+        var recordSurface: Surface? = null
         var size: Size = Size(1280, 720)
         var sensorOrientation: Int = 0
     }
@@ -52,10 +55,25 @@ class DualCamera(
     private var thread: HandlerThread? = null
     private var handler: Handler? = null
 
+    /** Compositing recorder, fed by a second output from each camera. */
+    val recorder = DualRecorder(context)
+
+    /**
+     * Whether the cameras are configured with the recorder's streams.
+     *
+     * Concurrent mode only guarantees one stream per camera. Asking for two
+     * usually works and is the only way to composite, but a device that
+     * refuses must still get its preview, so a refusal drops recording and
+     * reconfigures rather than failing the start.
+     */
+    private var recordingEnabled = false
+
     /** Guards against a second start arriving while the first is mid-flight. */
     private var starting = false
 
     fun isRunning(): Boolean = feeds.isNotEmpty()
+
+    fun canRecord(): Boolean = recordingEnabled && recorder.isReady()
 
     // ── start ────────────────────────────────────────────────────────────────
 
@@ -104,6 +122,15 @@ class DualCamera(
             stop()
             done(null, "Could not prepare the cameras: ${e.message}")
             return
+        }
+
+        // A session's outputs are fixed once it is created, so the recorder's
+        // surfaces have to exist now even if nothing is ever recorded.
+        val inputs = recorder.prepareInputs(feeds[0].size, feeds[1].size)
+        if (inputs != null) {
+            feeds[0].recordSurface = inputs.first
+            feeds[1].recordSurface = inputs.second
+            recordingEnabled = true
         }
 
         // Open one, then the next, then configure each in turn. Chaining is
@@ -183,11 +210,19 @@ class DualCamera(
 
         val executor = Executor { r -> handler?.post(r) ?: r.run() }
 
+        // Preview always; the recorder's stream only while it is on offer.
+        val recordSurface = if (recordingEnabled) feed.recordSurface else null
+        val outputs = if (recordSurface == null) {
+            listOf(OutputConfiguration(surface))
+        } else {
+            listOf(OutputConfiguration(surface), OutputConfiguration(recordSurface))
+        }
+
         try {
             device.createCaptureSession(
                 SessionConfiguration(
                     SessionConfiguration.SESSION_REGULAR,
-                    listOf(OutputConfiguration(surface)),
+                    outputs,
                     executor,
                     object : CameraCaptureSession.StateCallback() {
                         override fun onConfigured(session: CameraCaptureSession) {
@@ -197,7 +232,12 @@ class DualCamera(
                                     .createCaptureRequest(
                                         CameraDevice.TEMPLATE_PREVIEW,
                                     )
-                                    .apply { addTarget(surface) }
+                                    .apply {
+                                        addTarget(surface)
+                                        if (recordSurface != null) {
+                                            addTarget(recordSurface)
+                                        }
+                                    }
                                     .build()
                                 session.setRepeatingRequest(request, null, handler)
                                 configureNext(index + 1, done)
@@ -213,6 +253,16 @@ class DualCamera(
                         override fun onConfigureFailed(
                             session: CameraCaptureSession,
                         ) {
+                            // Two streams per camera is not a guarantee in
+                            // concurrent mode. Losing recording is a shame;
+                            // losing the preview would be a regression, so
+                            // drop the extra stream and configure again.
+                            if (recordingEnabled) {
+                                recordingEnabled = false
+                                closeSessions()
+                                configureNext(0, done)
+                                return
+                            }
                             fail(
                                 done,
                                 "The ${feed.lens} camera would not configure " +
@@ -227,6 +277,15 @@ class DualCamera(
         }
     }
 
+    /** Closes the capture sessions but leaves the devices open. */
+    private fun closeSessions() {
+        for (feed in feeds) {
+            try { feed.session?.stopRepeating() } catch (_: Exception) {}
+            try { feed.session?.close() } catch (_: Exception) {}
+            feed.session = null
+        }
+    }
+
     private fun fail(done: (Map<String, Any>?, String?) -> Unit, message: String) {
         starting = false
         stop()
@@ -236,6 +295,13 @@ class DualCamera(
     // ── stop ─────────────────────────────────────────────────────────────────
 
     fun stop() {
+        try {
+            if (recorder.isRecording()) recorder.stop { }
+        } catch (_: Exception) {
+        }
+        try { recorder.release() } catch (_: Exception) {}
+        recordingEnabled = false
+
         for (feed in feeds) {
             try { feed.session?.stopRepeating() } catch (_: Exception) {}
             try { feed.session?.close() } catch (_: Exception) {}
@@ -303,6 +369,7 @@ class DualCamera(
     }
 
     private fun describe(): Map<String, Any> = mapOf(
+        "canRecord" to canRecord(),
         "feeds" to feeds.map {
             mapOf(
                 "lens" to it.lens,

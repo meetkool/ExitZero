@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/camera_capability.dart';
@@ -53,6 +54,15 @@ class _DualCameraFeedState extends State<DualCameraFeed>
   CameraCapability? _capability;
   List<DualCameraFeedInfo> _feeds = const [];
 
+  /// Whether this device gave the recorder its second camera stream. Without
+  /// it the preview still runs, so the button is hidden rather than failing
+  /// when tapped.
+  bool _canRecord = false;
+  bool _recording = false;
+  bool _busy = false;
+  Duration _elapsed = Duration.zero;
+  Timer? _ticker;
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +73,9 @@ class _DualCameraFeedState extends State<DualCameraFeed>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _ticker?.cancel();
+    // Stopping the cameras natively also finishes and files any recording
+    // that was still running, so nothing is lost on the way out.
     if (_stage == _Stage.live) DualCameraService.stop();
     super.dispose();
   }
@@ -73,9 +86,15 @@ class _DualCameraFeedState extends State<DualCameraFeed>
     // these widgets go dead. Follow it back to Ready rather than showing two
     // frozen panes that look live.
     if (state != AppLifecycleState.resumed && _stage == _Stage.live) {
+      _ticker?.cancel();
+      _ticker = null;
       setState(() {
         _stage = _Stage.ready;
         _feeds = const [];
+        // The native side finishes the file on its way out, so a recording
+        // interrupted this way is still in the gallery.
+        _recording = false;
+        _elapsed = Duration.zero;
       });
     }
   }
@@ -101,6 +120,9 @@ class _DualCameraFeedState extends State<DualCameraFeed>
       setState(() {
         _feeds = feeds;
         _stage = _Stage.live;
+        _canRecord = DualCameraService.lastStartCanRecord;
+        _recording = false;
+        _elapsed = Duration.zero;
       });
       HapticFeedback.mediumImpact();
     } on DualCameraException catch (e) {
@@ -113,12 +135,81 @@ class _DualCameraFeedState extends State<DualCameraFeed>
   }
 
   Future<void> _stop() async {
+    // Finish the file before the cameras go, or the clip is thrown away.
+    if (_recording) await _toggleRecord();
+
     await DualCameraService.stop();
     if (!mounted) return;
     setState(() {
       _stage = _Stage.ready;
       _feeds = const [];
+      _recording = false;
+      _elapsed = Duration.zero;
     });
+  }
+
+  Future<void> _toggleRecord() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    try {
+      if (_recording) {
+        _ticker?.cancel();
+        _ticker = null;
+        final saved = await DualCameraService.stopRecording();
+        if (!mounted) return;
+        setState(() {
+          _recording = false;
+          _elapsed = Duration.zero;
+        });
+        HapticFeedback.mediumImpact();
+        _say(
+          saved.withAudio
+              ? 'Saved to Movies/ExitZero'
+              : 'Saved to Movies/ExitZero, without sound',
+        );
+      } else {
+        await DualCameraService.startRecording(
+          backRotation: widget.backRotation,
+          frontRotation: widget.frontRotation,
+          mirrorFront: widget.mirrorFront,
+        );
+        if (!mounted) return;
+        setState(() {
+          _recording = true;
+          _elapsed = Duration.zero;
+        });
+        HapticFeedback.heavyImpact();
+        _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (!mounted) return;
+          setState(() => _elapsed += const Duration(seconds: 1));
+        });
+      }
+    } on DualCameraException catch (e) {
+      if (!mounted) return;
+      _ticker?.cancel();
+      _ticker = null;
+      setState(() => _recording = false);
+      _say(e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _say(String message) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontSize: 12)),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  static String _clock(Duration d) {
+    final m = d.inMinutes.toString().padLeft(2, '0');
+    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
   }
 
   @override
@@ -273,24 +364,98 @@ class _DualCameraFeedState extends State<DualCameraFeed>
             ],
           ],
         ),
+        if (_recording)
+          Positioned(
+            top: 8,
+            left: 0,
+            right: 0,
+            child: Center(child: _recordingBadge()),
+          ),
         Positioned(
           right: 8,
           bottom: 8,
-          child: Material(
-            color: Colors.black.withValues(alpha: 0.6),
-            shape: const CircleBorder(),
-            child: InkWell(
-              onTap: _stop,
-              customBorder: const CircleBorder(),
-              child: const SizedBox(
-                width: 36,
-                height: 36,
-                child: Icon(Icons.stop, size: 18, color: Colors.white),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_canRecord) ...[
+                _roundButton(
+                  icon: _recording
+                      ? Icons.stop_circle
+                      : Icons.fiber_manual_record,
+                  colour: _recording
+                      ? Colors.white
+                      : const Color(0xFFE05252),
+                  onTap: _busy ? null : _toggleRecord,
+                ),
+                const SizedBox(width: 8),
+              ],
+              _roundButton(
+                icon: Icons.stop,
+                colour: Colors.white,
+                onTap: _stop,
               ),
-            ),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _roundButton({
+    required IconData icon,
+    required Color colour,
+    required VoidCallback? onTap,
+  }) {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.6),
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Icon(
+            icon,
+            size: 18,
+            color: onTap == null ? colour.withValues(alpha: 0.4) : colour,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _recordingBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE05252)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: const BoxDecoration(
+              color: Color(0xFFE05252),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'REC ${_clock(_elapsed)}',
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.8,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

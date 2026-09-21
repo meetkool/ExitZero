@@ -16,6 +16,9 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Sound for a Both Eyes recording. Optional: a refusal records
+         the video silently rather than failing. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Reading the user's own music. READ_MEDIA_AUDIO is the Android 13+
          permission; the legacy one is capped so it is not requested on
          versions that replaced it. -->
