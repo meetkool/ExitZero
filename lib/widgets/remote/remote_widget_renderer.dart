@@ -3,8 +3,10 @@ import '../../theme/app_theme.dart';
 import 'avatar_3d.dart';
 import 'camera_capability_card.dart';
 import 'camera_feed.dart';
+import 'clock_card.dart';
 import 'dual_camera_feed.dart';
 import 'globe_3d.dart';
+import 'music_player_card.dart';
 import 'widget_dsl.dart';
 
 /// Turns a manifest's `body` into widgets.
@@ -122,6 +124,38 @@ class RemoteWidgetRenderer {
           ).round(),
           mirrorFront: node['mirrorFront'] == true,
           debug: node['debug'] == true,
+        );
+      case 'clock':
+        return ClockCard(
+          height: _numeric(
+            WidgetExpression.resolveValue(node['size'], ctx),
+            190,
+          ),
+          background: WidgetColors.resolve(
+            node['background'],
+            fallback: const Color(0xFF2E4A3F),
+          ),
+          accent: WidgetColors.resolve(
+            node['color'],
+            fallback: const Color(0xFF63D9A6),
+          ),
+          timeColor: WidgetColors.resolve(
+            node['timeColor'],
+            fallback: const Color(0xFFF1F3F0),
+          ),
+          use24Hour: node['use24Hour'] == true,
+          showAlarm: node['showAlarm'] != false,
+        );
+      case 'musicPlayer':
+        return MusicPlayerCard(
+          height: _numeric(
+            WidgetExpression.resolveValue(node['size'], ctx),
+            190,
+          ),
+          accent: WidgetColors.resolve(
+            node['color'],
+            fallback: const Color(0xFFF7A8A8),
+          ),
         );
       case 'cameraCapability':
         return CameraCapabilityCard(

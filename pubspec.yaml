@@ -53,6 +53,7 @@ dependencies:
   # stable ships, and this lets pub take 0.12.x where the SDK allows it and
   # fall back to 0.11.x where it does not, instead of failing to resolve.
   camera: '>=0.11.0 <0.13.0'
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:

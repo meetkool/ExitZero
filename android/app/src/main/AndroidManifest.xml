@@ -11,6 +11,13 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Reading the user's own music. READ_MEDIA_AUDIO is the Android 13+
+         permission; the legacy one is capped so it is not requested on
+         versions that replaced it. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
     <!-- The camera is optional: the app is a dashboard, and a device without
          one should still be able to install it. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />

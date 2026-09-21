@@ -13,6 +13,7 @@ class MainActivity : FlutterActivity() {
     private val channelName = "exitzero/camera_capability"
 
     private var dualCamera: DualCamera? = null
+    private val media by lazy { DeviceMedia(applicationContext) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -43,6 +44,19 @@ class MainActivity : FlutterActivity() {
                     }
 
                     "dualRunning" -> result.success(dual.isRunning())
+
+                    "nextAlarm" -> result.success(media.nextAlarm())
+
+                    "audioTracks" -> result.success(
+                        media.audioTracks(call.argument<Int>("limit") ?: 300),
+                    )
+
+                    "audioArt" -> result.success(
+                        media.audioArt(
+                            call.argument<String>("path") ?: "",
+                            call.argument<String>("uri") ?: "",
+                        ),
+                    )
 
                     else -> result.notImplemented()
                 }
