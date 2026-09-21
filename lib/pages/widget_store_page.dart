@@ -93,12 +93,21 @@ class _WidgetStorePageState extends State<WidgetStorePage> {
     if (_installed.contains(entry.id)) {
       await InstalledWidgetsStore.uninstall(entry.id);
       await WidgetDataService.clear(entry.id);
+      // Drop the cached manifest too, so removing and adding a widget back is
+      // a genuine reset rather than handing the same stale copy over again.
+      await WidgetRegistryService.forgetManifest(entry.id);
       if (!mounted) return;
       setState(() => _installed.remove(entry.id));
       return;
     }
 
-    final manifest = await WidgetRegistryService.fetchManifest(entry);
+    // Always go to the network when installing. Returning whatever happened
+    // to be cached made adding a widget back a no-op: the user saw the old
+    // version and had no way to reach the published one.
+    final manifest = await WidgetRegistryService.fetchManifest(
+      entry,
+      forceRefresh: true,
+    );
     if (!mounted) return;
 
     if (manifest == null) {

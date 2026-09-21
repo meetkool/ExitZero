@@ -163,6 +163,12 @@ class WidgetRegistryService {
     }
   }
 
+  /// Drop a single widget's cached manifest, so the next fetch goes out.
+  static Future<void> forgetManifest(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('$_manifestPrefix$id');
+  }
+
   static Future<void> clearCache() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_registryKey);
