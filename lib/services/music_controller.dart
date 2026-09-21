@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'device_media.dart';
 
 /// What happens when a track ends.
-enum RepeatMode { off, all, one }
+enum TrackRepeat { off, all, one }
 
 /// Playback for the music on the device.
 ///
@@ -28,7 +28,7 @@ class MusicController extends ChangeNotifier {
   bool _denied = false;
   bool _playing = false;
   bool _shuffle = false;
-  RepeatMode _repeat = RepeatMode.off;
+  TrackRepeat _repeat = TrackRepeat.off;
   Duration _position = Duration.zero;
   Duration _length = Duration.zero;
   bool _wired = false;
@@ -48,7 +48,7 @@ class MusicController extends ChangeNotifier {
   bool get denied => _denied;
   bool get playing => _playing;
   bool get shuffle => _shuffle;
-  RepeatMode get repeat => _repeat;
+  TrackRepeat get repeat => _repeat;
   Duration get position => _position;
   Duration get length => _length;
 
@@ -122,7 +122,7 @@ class MusicController extends ChangeNotifier {
 
   /// What to do when a track runs out.
   Future<void> _complete() async {
-    if (_repeat == RepeatMode.one) {
+    if (_repeat == TrackRepeat.one) {
       _position = Duration.zero;
       _changed();
       await _start();
@@ -132,7 +132,7 @@ class MusicController extends ChangeNotifier {
     // With repeat off, the end of the list is the end: rolling back round to
     // track one would make "off" indistinguishable from "repeat all".
     final atEnd = !_shuffle && _index >= _tracks.length - 1;
-    if (_repeat == RepeatMode.off && atEnd) {
+    if (_repeat == TrackRepeat.off && atEnd) {
       await stop();
       return;
     }
@@ -213,9 +213,9 @@ class MusicController extends ChangeNotifier {
   /// off → all → one → off, the order every player uses.
   void cycleRepeat() {
     _repeat = switch (_repeat) {
-      RepeatMode.off => RepeatMode.all,
-      RepeatMode.all => RepeatMode.one,
-      RepeatMode.one => RepeatMode.off,
+      TrackRepeat.off => TrackRepeat.all,
+      TrackRepeat.all => TrackRepeat.one,
+      TrackRepeat.one => TrackRepeat.off,
     };
     _changed();
   }

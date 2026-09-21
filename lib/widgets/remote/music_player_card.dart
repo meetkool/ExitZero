@@ -399,8 +399,8 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
   Widget _repeatButton() {
     final mode = _music.repeat;
     return _iconButton(
-      mode == RepeatMode.one ? Icons.repeat_one : Icons.repeat,
-      active: mode != RepeatMode.off,
+      mode == TrackRepeat.one ? Icons.repeat_one : Icons.repeat,
+      active: mode != TrackRepeat.off,
       onTap: _music.cycleRepeat,
     );
   }
