@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'device_media.dart';
 
 /// What happens when a track ends.
@@ -18,6 +19,11 @@ class MusicController extends ChangeNotifier {
 
   static final MusicController instance = MusicController._();
 
+  static const String _kTrack = 'music_last_track';
+  static const String _kPosition = 'music_last_position';
+  static const String _kShuffle = 'music_shuffle';
+  static const String _kRepeat = 'music_repeat';
+
   final AudioPlayer _player = AudioPlayer();
   final Random _random = Random();
 
@@ -32,6 +38,13 @@ class MusicController extends ChangeNotifier {
   Duration _position = Duration.zero;
   Duration _length = Duration.zero;
   bool _wired = false;
+
+  /// Which track the player actually has open, as opposed to which one is
+  /// selected. They differ after a restart: the position is restored from
+  /// disk before anything has been handed to the player.
+  int _loadedIndex = -1;
+
+  DateTime _lastSave = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Bumped whenever anything but the playing position changes.
   ///
@@ -75,6 +88,7 @@ class MusicController extends ChangeNotifier {
     _loading = false;
     _denied = tracks.isEmpty;
     if (tracks.isNotEmpty && _index < 0) _index = 0;
+    if (tracks.isNotEmpty) await _restore();
     _changed();
 
     if (tracks.isNotEmpty) await _loadArt();
@@ -93,6 +107,9 @@ class MusicController extends ChangeNotifier {
     _player.onPositionChanged.listen((p) {
       _position = p;
       _changed(structural: false);
+      // Throttled inside: the tick fires several times a second, and the
+      // point is only to survive a kill, not to record every frame.
+      save();
     });
     _player.onDurationChanged.listen((d) {
       _length = d;
@@ -108,16 +125,28 @@ class MusicController extends ChangeNotifier {
     _changed();
   }
 
-  Future<void> _start() async {
+  Future<void> _start({Duration from = Duration.zero}) async {
     final track = current;
     if (track == null) return;
+
     // A real file where scoped storage still exposes one, the content uri
     // otherwise; DeviceFileSource cannot open a content:// path.
-    await _player.play(
-      track.isFile
-          ? DeviceFileSource(track.playable)
-          : UrlSource(track.playable),
-    );
+    final source = track.isFile
+        ? DeviceFileSource(track.playable)
+        : UrlSource(track.playable);
+
+    if (from > Duration.zero) {
+      // setSource before seek before resume. play() begins immediately, and
+      // a seek issued against a source that is not prepared yet is dropped
+      // -- which would silently restart the track from the beginning.
+      await _player.setSource(source);
+      await _player.seek(from);
+      await _player.resume();
+    } else {
+      await _player.play(source);
+    }
+
+    _loadedIndex = _index;
   }
 
   /// What to do when a track runs out.
@@ -142,12 +171,20 @@ class MusicController extends ChangeNotifier {
 
   Future<void> toggle() async {
     if (current == null) return;
+
     if (_playing) {
       await _player.pause();
-    } else if (_position > Duration.zero) {
+      await save(force: true);
+      return;
+    }
+
+    // After a restart the position is restored but the player holds nothing,
+    // so resume() would do exactly nothing. Only resume a track the player
+    // actually has open; otherwise load it and start at the saved offset.
+    if (_loadedIndex == _index && _position > Duration.zero) {
       await _player.resume();
     } else {
-      await _start();
+      await _start(from: _position);
     }
   }
 
@@ -157,14 +194,18 @@ class MusicController extends ChangeNotifier {
   }
 
   Future<void> pause() async {
-    if (_playing) await _player.pause();
+    if (!_playing) return;
+    await _player.pause();
+    await save(force: true);
   }
 
   Future<void> stop() async {
     await _player.stop();
     _playing = false;
     _position = Duration.zero;
+    _loadedIndex = -1;
     _changed();
+    await save(force: true);
   }
 
   Future<void> skip(int delta) async {
@@ -189,6 +230,7 @@ class MusicController extends ChangeNotifier {
     _changed();
 
     await _loadArt();
+    await save(force: true);
     await _start();
   }
 
@@ -201,13 +243,17 @@ class MusicController extends ChangeNotifier {
     _changed();
 
     await _loadArt();
+    await save(force: true);
     await _start();
   }
 
   Future<void> seek(Duration to) async {
     _position = to;
     _changed();
-    await _player.seek(to);
+    // Seeking a track the player has not opened yet would be dropped; the
+    // offset is remembered instead and applied when play is pressed.
+    if (_loadedIndex == _index) await _player.seek(to);
+    await save(force: true);
   }
 
   /// off → all → one → off, the order every player uses.
@@ -218,10 +264,74 @@ class MusicController extends ChangeNotifier {
       TrackRepeat.one => TrackRepeat.off,
     };
     _changed();
+    save(force: true);
   }
 
   void toggleShuffle() {
     _shuffle = !_shuffle;
     _changed();
+    save(force: true);
+  }
+
+  // ── remembering where you were ─────────────────────────────────────────
+
+  /// Writes the current track, offset and modes to disk.
+  ///
+  /// Throttled unless forced, because the position tick calls it several
+  /// times a second and the goal is only to survive the app being killed.
+  Future<void> save({bool force = false}) async {
+    final track = current;
+    if (track == null) return;
+
+    final now = DateTime.now();
+    if (!force && now.difference(_lastSave) < const Duration(seconds: 5)) {
+      return;
+    }
+    _lastSave = now;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kTrack, track.id);
+      await prefs.setInt(_kPosition, _position.inMilliseconds);
+      await prefs.setBool(_kShuffle, _shuffle);
+      await prefs.setInt(_kRepeat, _repeat.index);
+    } catch (_) {
+      // Losing the bookmark is not worth interrupting playback over.
+    }
+  }
+
+  /// Puts back what [save] wrote, as far as it still makes sense.
+  Future<void> _restore() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      _shuffle = prefs.getBool(_kShuffle) ?? false;
+      final repeat = prefs.getInt(_kRepeat) ?? 0;
+      _repeat =
+          TrackRepeat.values[repeat.clamp(0, TrackRepeat.values.length - 1)];
+
+      final id = prefs.getString(_kTrack);
+      if (id == null || id.isEmpty) return;
+
+      // The file may have been deleted since. Falling back to the first
+      // track beats restoring a selection that cannot play.
+      final i = _tracks.indexWhere((t) => t.id == id);
+      if (i < 0) return;
+      _index = i;
+
+      // Seed the length from the media store so the seek bar is right
+      // before the player has opened anything and reported its own.
+      final total = _tracks[i].duration;
+      _length = total;
+
+      final saved = Duration(milliseconds: prefs.getInt(_kPosition) ?? 0);
+      // Resuming into the last second would end the track instantly and
+      // skip to the next one, which is not what "carry on" means.
+      final nearEnd = total > Duration.zero &&
+          saved >= total - const Duration(seconds: 1);
+      _position = (saved < Duration.zero || nearEnd) ? Duration.zero : saved;
+    } catch (_) {
+      // No bookmark is the same as a fresh install.
+    }
   }
 }

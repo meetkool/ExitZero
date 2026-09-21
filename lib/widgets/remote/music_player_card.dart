@@ -24,12 +24,14 @@ class MusicPlayerCard extends StatefulWidget {
   State<MusicPlayerCard> createState() => _MusicPlayerCardState();
 }
 
-class _MusicPlayerCardState extends State<MusicPlayerCard> {
+class _MusicPlayerCardState extends State<MusicPlayerCard>
+    with WidgetsBindingObserver {
   final MusicController _music = MusicController.instance;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _music.addListener(_onChange);
     _music.load();
     // Best effort: a device that refuses a media session still gets a card.
@@ -40,8 +42,19 @@ class _MusicPlayerCardState extends State<MusicPlayerCard> {
   void dispose() {
     // Deliberately not stopping the player: the notification outlives this
     // widget, and killing playback on a scroll rebuild would be surprising.
+    WidgetsBinding.instance.removeObserver(this);
     _music.removeListener(_onChange);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // The periodic save is five seconds coarse, which is enough to lose the
+    // spot when the app is killed. Leaving the foreground is the last
+    // reliable moment to write the exact one down.
+    if (state != AppLifecycleState.resumed) {
+      _music.save(force: true);
+    }
   }
 
   void _onChange() {
