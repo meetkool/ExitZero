@@ -42,13 +42,23 @@ class VideoTileCard extends StatefulWidget {
 }
 
 class _VideoTileCardState extends State<VideoTileCard>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late VideoPlayerController _controller;
   late AnimationController _pulse;
+
+  bool _ready = false;
+  bool _foreground = true;
+  bool _reviving = false;
+
+  /// Throttling for [_revive], so a player something else keeps pausing
+  /// cannot turn into a play/pause fight that burns the battery.
+  DateTime _lastRevive = DateTime.fromMillisecondsSinceEpoch(0);
+  int _burst = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _pulse = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -56,26 +66,91 @@ class _VideoTileCardState extends State<VideoTileCard>
     _initVideo();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Android pauses the player when the app leaves the foreground and never
+    // starts it again. That is how a looping background video ends up frozen
+    // on a dashboard you came back to.
+    _foreground = state == AppLifecycleState.resumed;
+    if (_foreground) {
+      _burst = 0;
+      _revive();
+    }
+  }
+
+  /// Puts the video back to playing whenever anything stopped it.
+  ///
+  /// Called on every controller update rather than once at startup, because
+  /// the pause can come from the lifecycle, from audio focus, or from a loop
+  /// that failed to wrap, and none of those announce themselves.
+  Future<void> _revive() async {
+    if (!widget.autoplay || !_ready || _reviving || !_foreground) return;
+
+    final value = _controller.value;
+    if (!value.isInitialized || value.hasError) return;
+    if (value.isPlaying || value.isBuffering) return;
+
+    final now = DateTime.now();
+    if (now.difference(_lastRevive) < const Duration(milliseconds: 400)) return;
+    if (now.difference(_lastRevive) > const Duration(seconds: 5)) _burst = 0;
+    // Something is pausing this as fast as we can start it. Stop pushing
+    // until the next time the app comes back to the foreground.
+    if (_burst >= 8) return;
+    _lastRevive = now;
+    _burst++;
+
+    _reviving = true;
+    try {
+      // A loop that did not wrap leaves the position parked at the end,
+      // where play() on its own does nothing.
+      final duration = value.duration;
+      if (duration > Duration.zero &&
+          value.position >= duration - const Duration(milliseconds: 150)) {
+        await _controller.seekTo(Duration.zero);
+      }
+      await _controller.play();
+    } catch (_) {
+      // A disposed or broken controller is not worth a crash.
+    } finally {
+      _reviving = false;
+    }
+  }
+
   Future<void> _initVideo() async {
-    // Note: VideoPlayer uses ExoPlayer on Android which has a known bug 
+    // Note: VideoPlayer uses ExoPlayer on Android which has a known bug
     // on some emulators (like Waydroid) where it crashes the app with Error 0xffffff92
-    // when native alarm audio is played concurrently. 
-    _controller = widget.isAsset
+    // when native alarm audio is played concurrently.
+    final controller = widget.isAsset
         ? VideoPlayerController.asset(widget.videoSource)
         : VideoPlayerController.networkUrl(Uri.parse(widget.videoSource));
-    await _controller.initialize();
-    await _controller.setLooping(widget.loop);
-    await _controller.setVolume(widget.muted ? 0.0 : 1.0);
-    if (widget.autoplay) {
-      await _controller.play();
+    _controller = controller;
+    _ready = false;
+
+    try {
+      await controller.initialize();
+      // The card can be disposed, or pointed at another source, while
+      // initialize() is in flight; touching the old controller after that
+      // throws.
+      if (!mounted || !identical(_controller, controller)) return;
+
+      await controller.setLooping(widget.loop);
+      await controller.setVolume(widget.muted ? 0.0 : 1.0);
+      if (widget.autoplay) await controller.play();
+    } catch (_) {
+      return;
     }
-    if (mounted) setState(() {});
+
+    if (!mounted || !identical(_controller, controller)) return;
+    _ready = true;
+    controller.addListener(_revive);
+    setState(() {});
   }
 
   @override
   void didUpdateWidget(VideoTileCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.videoSource != widget.videoSource) {
+      _controller.removeListener(_revive);
       _controller.dispose();
       _initVideo();
     }
@@ -83,7 +158,9 @@ class _VideoTileCardState extends State<VideoTileCard>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     try {
+      _controller.removeListener(_revive);
       _controller.dispose();
     } catch (_) {}
     _pulse.dispose();
