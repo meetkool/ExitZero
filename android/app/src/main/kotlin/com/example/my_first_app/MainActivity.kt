@@ -58,6 +58,16 @@ class MainActivity : FlutterActivity() {
                         ),
                     )
 
+                    "saveAudio" -> result.success(
+                        media.saveAudio(
+                            call.argument<String>("fileName") ?: "track.mp3",
+                            call.argument<ByteArray>("bytes") ?: ByteArray(0),
+                            call.argument<String>("title") ?: "",
+                            call.argument<String>("artist") ?: "",
+                            call.argument<String>("album") ?: "",
+                        ),
+                    )
+
                     else -> result.notImplemented()
                 }
             }

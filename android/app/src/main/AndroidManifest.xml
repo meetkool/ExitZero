@@ -18,6 +18,12 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!-- Writing a downloaded track into the public Music library. From
+         Android 10 MediaStore grants this for our own inserts, so the
+         permission is only asked for on the versions that still need it. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
     <!-- The camera is optional: the app is a dashboard, and a device without
          one should still be able to install it. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />

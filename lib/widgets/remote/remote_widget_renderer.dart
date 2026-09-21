@@ -7,6 +7,7 @@ import 'clock_card.dart';
 import 'dual_camera_feed.dart';
 import 'globe_3d.dart';
 import 'music_player_card.dart';
+import 'spotdl_card.dart';
 import 'widget_dsl.dart';
 
 /// Turns a manifest's `body` into widgets.
@@ -156,6 +157,21 @@ class RemoteWidgetRenderer {
             node['color'],
             fallback: const Color(0xFFF7A8A8),
           ),
+        );
+      case 'spotdlDownloader':
+        return SpotdlCard(
+          height: _numeric(
+            WidgetExpression.resolveValue(node['size'], ctx),
+            300,
+          ),
+          accent: WidgetColors.resolve(
+            node['color'],
+            fallback: const Color(0xFF1DB954),
+          ),
+          // The server address belongs to the person, not the manifest, so
+          // it arrives as config rather than a literal.
+          baseUrl: _s(WidgetExpression.resolveValue(node['baseUrl'], ctx)),
+          initialQuery: _s(WidgetExpression.resolveValue(node['query'], ctx)),
         );
       case 'cameraCapability':
         return CameraCapabilityCard(
