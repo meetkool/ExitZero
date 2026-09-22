@@ -24,6 +24,17 @@ class DualCameraFeed extends StatefulWidget {
   final int backRotation;
   final int frontRotation;
 
+  /// Clockwise degrees applied to each lens when recording.
+  ///
+  /// Separate from the preview's numbers on purpose. The preview turns a
+  /// texture inside a tall pane and crops it; the recording turns the same
+  /// texture into a wide frame. The geometry differs, so the value that
+  /// looks right in one is not necessarily right in the other. These
+  /// default to the sensor orientations the device reports, which is what
+  /// stands a sensor buffer upright.
+  final int recordBackRotation;
+  final int recordFrontRotation;
+
   /// Mirror the front pane, the way a selfie camera usually reads.
   final bool mirrorFront;
 
@@ -37,6 +48,8 @@ class DualCameraFeed extends StatefulWidget {
     this.height = 260,
     this.backRotation = 90,
     this.frontRotation = 270,
+    this.recordBackRotation = 90,
+    this.recordFrontRotation = 270,
     this.mirrorFront = false,
     this.debug = false,
   });
@@ -170,8 +183,8 @@ class _DualCameraFeedState extends State<DualCameraFeed>
         );
       } else {
         await DualCameraService.startRecording(
-          backRotation: widget.backRotation,
-          frontRotation: widget.frontRotation,
+          backRotation: widget.recordBackRotation,
+          frontRotation: widget.recordFrontRotation,
           mirrorFront: widget.mirrorFront,
         );
         if (!mounted) return;

@@ -319,6 +319,8 @@ class DualRecorder(private val context: Context) {
             GLES20.glViewport(0, 0, WIDTH, HEIGHT)
             composite.clear()
 
+            // Cover, not fit: a landscape video should be filled edge to
+            // edge, with whatever hangs over the sides cropped away.
             composite.draw(
                 textureId = backInput.textureId,
                 stMatrix = backInput.matrix,
@@ -327,6 +329,8 @@ class DualRecorder(private val context: Context) {
                 rotation = backRotation,
                 mirror = false,
                 left = -1f, top = 1f, right = 1f, bottom = -1f,
+                viewportWidth = WIDTH, viewportHeight = HEIGHT,
+                cover = true,
             )
 
             val frontInput = front
@@ -344,6 +348,8 @@ class DualRecorder(private val context: Context) {
                     mirror = mirrorFront,
                     left = PIP_LEFT, top = PIP_TOP,
                     right = PIP_RIGHT, bottom = PIP_BOTTOM,
+                    viewportWidth = WIDTH, viewportHeight = HEIGHT,
+                    cover = true,
                 )
             }
 
@@ -719,10 +725,13 @@ class DualRecorder(private val context: Context) {
         const val EGL_RECORDABLE_ANDROID = 0x3142
 
         // The facecam: bottom right, a quarter of the width, with a margin.
+        // Exactly 16:9 in pixels (320x180 of 1280x720), so a landscape face
+        // fills it without bars: half a clip unit is half the frame on both
+        // axes, and the frame's own aspect does the rest.
         const val PIP_RIGHT = 0.94f
         const val PIP_LEFT = 0.44f
-        const val PIP_BOTTOM = -0.90f
-        const val PIP_TOP = -0.27f
+        const val PIP_BOTTOM = -0.92f
+        const val PIP_TOP = -0.42f
     }
 }
 

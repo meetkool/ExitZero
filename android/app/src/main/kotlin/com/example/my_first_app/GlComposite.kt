@@ -113,12 +113,16 @@ class GlComposite {
      *
      * [left], [top], [right] and [bottom] are in clip space, -1 to 1, with
      * +1 at the top. [stMatrix] is whatever the SurfaceTexture reported for
-     * this frame; [rotation] and [mirror] are applied on top of it, so the
-     * same numbers that stand the preview upright also stand the recording
-     * upright.
+     * this frame; [rotation] and [mirror] are applied on top of it.
      *
-     * The image is fitted inside the rectangle rather than stretched to it:
-     * a portrait frame in a landscape slot gets bars, not distortion.
+     * [cover] fills the rectangle and crops whatever hangs over, the way a
+     * video frame should be filled. False letterboxes instead, which is only
+     * useful for seeing the whole source.
+     *
+     * Clip space is square while the frame is not, so a slot's shape has to
+     * be worked out in pixels. Comparing the clip-space width and height
+     * directly treats a 16:9 frame as though it were square, and squashes
+     * every source by the frame's aspect ratio.
      */
     fun draw(
         textureId: Int,
@@ -131,8 +135,12 @@ class GlComposite {
         top: Float,
         right: Float,
         bottom: Float,
+        viewportWidth: Int,
+        viewportHeight: Int,
+        cover: Boolean = true,
     ) {
         if (program == 0) return
+        if (viewportWidth <= 0 || viewportHeight <= 0) return
 
         val turns = ((rotation % 360) + 360) % 360
 
@@ -146,21 +154,27 @@ class GlComposite {
             sourceWidth.toFloat() / sourceHeight.toFloat()
         }
 
-        val slotWidth = (right - left) / 2f
-        val slotHeight = (top - bottom) / 2f
+        val halfWidth = (right - left) / 2f
+        val halfHeight = (top - bottom) / 2f
+        if (halfWidth <= 0f || halfHeight <= 0f) return
+
         val centreX = (left + right) / 2f
         val centreY = (top + bottom) / 2f
 
-        // Clip space is square, so a slot's real shape is its size scaled by
-        // the frame's own aspect; the viewport takes care of the rest.
-        val slotAspect = if (slotHeight == 0f) 1f else slotWidth / slotHeight
+        // The slot's real shape: clip space spans 2 units across the frame's
+        // full width and height, so half a unit is half the pixels.
+        val slotPixelWidth = halfWidth * viewportWidth
+        val slotPixelHeight = halfHeight * viewportHeight
+        val slotAspect = slotPixelWidth / slotPixelHeight
 
-        var scaleX = slotWidth
-        var scaleY = slotHeight
-        if (sourceAspect > slotAspect) {
-            scaleY = slotWidth / sourceAspect
+        var scaleX = halfWidth
+        var scaleY = halfHeight
+        val wider = sourceAspect > slotAspect
+        if (cover == wider) {
+            // Grow across, or shrink across, depending on the mode.
+            scaleX = halfWidth * (sourceAspect / slotAspect)
         } else {
-            scaleX = slotHeight * sourceAspect
+            scaleY = halfHeight * (slotAspect / sourceAspect)
         }
 
         Matrix.setIdentityM(mvp, 0)
@@ -174,6 +188,18 @@ class GlComposite {
         if (turns != 0) Matrix.rotateM(texture, 0, turns.toFloat(), 0f, 0f, 1f)
         if (mirror) Matrix.scaleM(texture, 0, -1f, 1f, 1f)
         Matrix.translateM(texture, 0, -0.5f, -0.5f, 0f)
+
+        // Covering overflows the slot on purpose, so the overflow has to be
+        // cut off -- otherwise the inset bleeds across the whole frame.
+        val scissorX = ((left + 1f) / 2f * viewportWidth).toInt()
+        val scissorY = ((bottom + 1f) / 2f * viewportHeight).toInt()
+        GLES20.glEnable(GLES20.GL_SCISSOR_TEST)
+        GLES20.glScissor(
+            scissorX,
+            scissorY,
+            slotPixelWidth.toInt().coerceAtLeast(1),
+            slotPixelHeight.toInt().coerceAtLeast(1),
+        )
 
         GLES20.glUseProgram(program)
 
@@ -200,6 +226,7 @@ class GlComposite {
         GLES20.glDisableVertexAttribArray(aPosition)
         GLES20.glDisableVertexAttribArray(aTexCoord)
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0)
+        GLES20.glDisable(GLES20.GL_SCISSOR_TEST)
     }
 
     /**

@@ -123,6 +123,16 @@ class RemoteWidgetRenderer {
             WidgetExpression.resolveValue(node['frontRotation'], ctx),
             270,
           ).round(),
+          // Recording turns the same textures into a wide frame rather than
+          // a tall pane, so it gets its own numbers.
+          recordBackRotation: _numeric(
+            WidgetExpression.resolveValue(node['recordBackRotation'], ctx),
+            90,
+          ).round(),
+          recordFrontRotation: _numeric(
+            WidgetExpression.resolveValue(node['recordFrontRotation'], ctx),
+            270,
+          ).round(),
           mirrorFront: node['mirrorFront'] == true,
           debug: node['debug'] == true,
         );
