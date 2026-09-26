@@ -46,6 +46,12 @@ class MusicController extends ChangeNotifier {
 
   DateTime _lastSave = DateTime.fromMillisecondsSinceEpoch(0);
 
+  /// An offset waiting for the source to be ready to take it.
+  Duration? _pendingSeek;
+
+  /// Why playback is not happening, when it should be.
+  String? _error;
+
   /// Bumped whenever anything but the playing position changes.
   ///
   /// The media session republishes on this rather than on every listener
@@ -64,6 +70,7 @@ class MusicController extends ChangeNotifier {
   TrackRepeat get repeat => _repeat;
   Duration get position => _position;
   Duration get length => _length;
+  String? get error => _error;
 
   DeviceTrack? get current =>
       (_index >= 0 && _index < _tracks.length) ? _tracks[_index] : null;
@@ -98,10 +105,19 @@ class MusicController extends ChangeNotifier {
     if (_wired) return;
     _wired = true;
 
+    // Cheap insurance: a player left at zero volume looks exactly like a
+    // player that is stuck.
+    try {
+      _player.setVolume(1.0);
+    } catch (_) {
+      // Not fatal; the default is full volume anyway.
+    }
+
     _player.onPlayerStateChanged.listen((state) {
       final playing = state == PlayerState.playing;
       if (playing == _playing) return;
       _playing = playing;
+      if (playing) _error = null;
       _changed();
     });
     _player.onPositionChanged.listen((p) {
@@ -114,6 +130,9 @@ class MusicController extends ChangeNotifier {
     _player.onDurationChanged.listen((d) {
       _length = d;
       _changed();
+      // The duration arriving means the source is prepared, which is the
+      // first moment a seek on it will actually land.
+      _applyPendingSeek();
     });
     _player.onPlayerComplete.listen((_) => _complete());
   }
@@ -135,18 +154,33 @@ class MusicController extends ChangeNotifier {
         ? DeviceFileSource(track.playable)
         : UrlSource(track.playable);
 
-    if (from > Duration.zero) {
-      // setSource before seek before resume. play() begins immediately, and
-      // a seek issued against a source that is not prepared yet is dropped
-      // -- which would silently restart the track from the beginning.
-      await _player.setSource(source);
-      await _player.seek(from);
-      await _player.resume();
-    } else {
-      await _player.play(source);
-    }
-
+    // Always the plain play() path. setSource() returns once the source is
+    // set, not once it is prepared, so seeking and resuming straight after
+    // it left the player reporting that it was playing while producing no
+    // sound at all -- the state was true and the audio was not.
+    //
+    // The offset is applied once the duration arrives instead, which is the
+    // player's own signal that the source is ready to be moved around.
+    _pendingSeek = from > Duration.zero ? from : null;
+    await _player.play(source);
     _loadedIndex = _index;
+  }
+
+  /// Applies an offset that was waiting for the source to be ready.
+  Future<void> _applyPendingSeek() async {
+    final to = _pendingSeek;
+    if (to == null) return;
+    _pendingSeek = null;
+
+    // A saved spot past the end of what actually loaded is not worth
+    // chasing; letting it play from the top beats seeking into nothing.
+    if (_length > Duration.zero && to >= _length) return;
+
+    try {
+      await _player.seek(to);
+    } catch (_) {
+      // The track plays from the beginning. Sound beats precision.
+    }
   }
 
   /// What to do when a track runs out.
@@ -172,20 +206,43 @@ class MusicController extends ChangeNotifier {
   Future<void> toggle() async {
     if (current == null) return;
 
-    if (_playing) {
-      await _player.pause();
-      await save(force: true);
-      return;
-    }
+    try {
+      if (_playing) {
+        await _player.pause();
+        await save(force: true);
+        return;
+      }
 
-    // After a restart the position is restored but the player holds nothing,
-    // so resume() would do exactly nothing. Only resume a track the player
-    // actually has open; otherwise load it and start at the saved offset.
-    if (_loadedIndex == _index && _position > Duration.zero) {
-      await _player.resume();
-    } else {
-      await _start(from: _position);
+      _error = null;
+
+      // After a restart the position is restored but the player holds
+      // nothing, so resume() would do exactly nothing. Only resume a track
+      // the player actually has open; otherwise load it from the top and
+      // let the saved offset be applied once it is ready.
+      if (_loadedIndex == _index && _position > Duration.zero) {
+        await _player.resume();
+        await _ensureActuallyPlaying();
+      } else {
+        await _start(from: _position);
+      }
+    } catch (e) {
+      _error = 'Could not play this track.';
+      _playing = false;
+      _changed();
     }
+  }
+
+  /// Reloads the track when a resume did not take.
+  ///
+  /// A player can be left holding a source it will no longer play -- the
+  /// file moved, the session was torn down underneath it -- and resume()
+  /// then returns without complaint and without sound. Rather than leave a
+  /// pause button that does nothing, load the track again from scratch.
+  Future<void> _ensureActuallyPlaying() async {
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (_playing) return;
+    _loadedIndex = -1;
+    await _start(from: _position);
   }
 
   /// For the notification's play button, which is never a toggle.
@@ -227,6 +284,7 @@ class MusicController extends ChangeNotifier {
     _position = Duration.zero;
     _length = Duration.zero;
     _art = null;
+    _error = null;
     _changed();
 
     await _loadArt();
@@ -240,6 +298,7 @@ class MusicController extends ChangeNotifier {
     _position = Duration.zero;
     _length = Duration.zero;
     _art = null;
+    _error = null;
     _changed();
 
     await _loadArt();

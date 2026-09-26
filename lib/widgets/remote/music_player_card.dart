@@ -345,12 +345,19 @@ class _MusicPlayerCardState extends State<MusicPlayerCard>
                         children: [
                           Flexible(
                             child: Text(
-                              track?.title ?? 'Nothing selected',
+                              // A failure belongs where the track name goes:
+                              // a pause button over a silent player is worse
+                              // than an error that says so.
+                              _music.error ??
+                                  track?.title ??
+                                  'Nothing selected',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 11,
-                                color: Colors.white.withValues(alpha: 0.75),
+                                color: _music.error != null
+                                    ? const Color(0xFFE05252)
+                                    : Colors.white.withValues(alpha: 0.75),
                               ),
                             ),
                           ),
