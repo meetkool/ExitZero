@@ -8,6 +8,7 @@ import 'dual_camera_feed.dart';
 import 'globe_3d.dart';
 import 'music_player_card.dart';
 import 'spotdl_card.dart';
+import 'video_playlist_card.dart';
 import 'widget_dsl.dart';
 
 /// Turns a manifest's `body` into widgets.
@@ -182,6 +183,23 @@ class RemoteWidgetRenderer {
           // it arrives as config rather than a literal.
           baseUrl: _s(WidgetExpression.resolveValue(node['baseUrl'], ctx)),
           initialQuery: _s(WidgetExpression.resolveValue(node['query'], ctx)),
+        );
+      case 'videoPlayer':
+        return VideoPlaylistCard(
+          height: _numeric(
+            WidgetExpression.resolveValue(node['size'], ctx),
+            200,
+          ),
+          accent: WidgetColors.resolve(node['color'], fallback: accent),
+          // A literal list in the manifest, or a binding to one fetched
+          // from the widget's data source. resolveValue passes a List
+          // straight through, so the same line serves both.
+          videos: VideoLink.parse(
+            WidgetExpression.resolveValue(node['videos'], ctx),
+          ),
+          autoplay: node['autoplay'] == true,
+          muted: node['muted'] == true,
+          loop: node['loop'] != false,
         );
       case 'cameraCapability':
         return CameraCapabilityCard(
